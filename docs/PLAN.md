@@ -554,3 +554,92 @@ the shrine instead of reaching the tree.
 | Defeat → restart | Board cleared, wave reset to 1, Eldree healed, **gold reset**, shop reopens |
 | 6-wave regression, rotating placement bearing | All 6 cleared, reactive wiring (shop→registry→sim→economy→shop) held throughout |
 | Dev-handle strip | `Object.assign(window`, `restartRun`, `game:{` all absent from the prod bundle |
+
+---
+
+## Appendix H — shop revised: buy every slot, not just one
+
+Changed on request: the shop no longer closes after a single purchase. A
+visit now stays open across as many of the 3 offered slots as the player can
+afford, with Reroll available throughout.
+
+**The correctness trap this created, and how it was avoided.** The naive
+version marks a slot "bought" the instant its Build button is tapped. But
+Placement is pay-at-commit (Appendix G) — cancelling a placement is free and
+common (a mistap, a deliberate change of mind). If the slot is marked bought
+at tap-time, a cancelled placement leaves a slot permanently flagged "✓ Built"
+with nothing actually on the board, silently costing the player that build
+option for the rest of the visit. Caught before it shipped by testing the
+cancel path specifically (Escape mid-placement) rather than only the happy
+path — the fix was a new `Placement.onPlaced` callback that fires from inside
+`commit()`'s success branch, distinct from `onChange`'s return to `idle` (which
+fires on cancellation too). The shop only marks a slot bought when
+`onPlaced` actually fires.
+
+**State ownership split between two "still deciding" signals.** `shop.isOpen`
+now spans the whole visit, including the hidden-panel interval while a single
+purchase is mid-placement. `placement.isActive` covers just that interval.
+The Ready button's label logic has to check `placement.isActive` before
+`shop.isOpen` — otherwise it reads "Resolve the shop" while the board and
+ghost preview are visibly what's on screen, because the panel being hidden
+doesn't mean the *session* ended.
+
+**Skip vs. Continue is not the same action reused.** Once a purchase has
+happened, refunding 15g for "skipping" the rest of the offer no longer makes
+sense — the player already got value from the visit. The footer button
+relabels based on `Shop.anyBought`: "Skip · +15g" before any purchase,
+"Continue" (no gold change) after.
+
+Verified: buy-cancel-retry leaves the slot buyable and unmarked; a full
+4-wave run buying every affordable slot each visit (up to 3 Constructs per
+wave) held eldreeHp untouched throughout; reroll clears all "Built" marks on a
+fresh draw.
+
+---
+
+## Appendix I — persistent bottom shop, top-only enemy approach
+
+Two requested layout changes, implemented together since both affect how the
+board reads at a glance.
+
+**Shop moved from a blocking modal to a persistent bottom dock.** M5's shop
+was a full-screen overlay, deliberately, to satisfy the plan's own risk note
+("never show shop and battlefield decisions simultaneously"). That guidance is
+now superseded: the shop (`ShopDock`) sits pinned at the bottom of the screen
+for the whole Prep period, always showing exactly 3 cards, with the board
+visible and never obscured. This is actually a better fit for "drag the
+Construct onto an available hex" — a full-screen shop was working against the
+very interaction it was meant to enable, since the board wasn't visible to
+drag onto while the shop was open. `Shop` lost `isOpen`/`skip()`/`finish()`
+entirely: there's nothing to open or close, only a wave in progress (dock
+hidden) or not (dock shown). Verified: buying, placing, and rerolling all
+still work through the dock exactly as the modal's multi-buy mechanic did
+(Appendix H), confirmed via a 4-wave regression sweep.
+
+**Enemies now always approach from the top of the board.** Previously waves
+spawned across `arcs` compass directions (up to 6, surrounding the board).
+`WaveDef.arcs` is renamed `lanes` and reinterpreted: lanes are still evenly
+spaced and still the wave's pressure dial, but always within a ~130° band
+centred on the world angle that projects to the top of the screen, never
+wrapping to the sides or bottom.
+
+Before writing the spawn math, the world-to-screen direction was verified
+empirically rather than assumed from the camera setup code: projected two
+world points (+Z and -Z) through the camera's live `matrixWorldInverse` /
+`projectionMatrix` and compared clip-space Y. -Z was confirmed to render at
+the top. Getting this backwards would have put the entire Shadow Army at the
+bottom of the screen, behind the shop dock, which is exactly the failure mode
+worth a five-minute check to avoid.
+
+**Two false alarms while verifying, both render-loop timing, not sim bugs.**
+Manually stepping `sim.update()` in a script while the tab is fronted races
+the app's own live game loop, which is also calling `sim.update()` every
+frame — double-stepping combat and making a wave resolve far faster than it
+should. And synchronously changing state then immediately calling `.click()`
+on a button races `syncReadyButton()`, which only runs inside `render()`; a
+disabled `<button>` doesn't dispatch `click` at all (matching real touch
+behaviour — a visually disabled button can't be tapped either), so the
+click silently no-ops if no render frame has landed yet to lift the
+`disabled` attribute. Both resolved by pausing the loop (`loop.paused = true`)
+before manual stepping, or calling the underlying function (`game.startWave()`)
+directly instead of racing the DOM.

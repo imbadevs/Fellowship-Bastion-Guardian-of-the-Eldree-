@@ -112,16 +112,29 @@ game.sim.waveProgress
 ```
 
 **M5 — the loop**
-- The shop opens automatically before every wave, including the very first —
-  1-of-3 building cards, weighted by rarity, weights shifting as waves progress
-- Reroll (10g, +5g each use that visit) and Skip (+15g refund), both gated on
-  gold at the data layer as well as in the UI
+- The shop is docked at the bottom of the screen for the whole Prep period —
+  not a modal. The board stays visible and interaction-adjacent the entire
+  time; opens automatically before every wave, including the very first
+- Always 3 building cards, weighted by rarity, weights shifting as waves
+  progress. Every affordable card is buyable, not just one — a bought card
+  turns into a compact "✓ Built" mark and stays that way; the other slots
+  remain live. A card is only marked bought once its Construct actually lands
+  on a tile, so a cancelled or mistapped placement leaves it buyable again
+  rather than falsely marking it sold
+- Reroll (10g, +5g each use that Prep period) redraws all 3 and clears every
+  "Built" mark, gated on gold at the data layer as well as in the UI. There is
+  no "skip" action — with nothing to dismiss, the player just buys what they
+  want and taps Ready when done
 - Buying a card arms the same drag-or-tap placement M2 built; cost is spent at
   commit, so backing out of a placement costs nothing
-- A `Begin Wave N` control replaces the dev "Start" button — enabled only once
-  the shop is resolved and nothing is mid-placement
-- Wave clear grants a gold bonus and partially heals the Eldree, then the next
-  shop opens automatically
+- A `Begin Wave N` control replaces the dev "Start" button — enabled once
+  nothing is mid-placement and combat isn't running
+- Wave clear grants a gold bonus and partially heals the Eldree, then the shop
+  dock reopens automatically; it hides again the instant a wave starts
+- The Shadow Army always approaches from the top of the board. `WaveDef.lanes`
+  (1–6) spreads the horde across evenly-spaced columns within a fixed
+  ~130° band centred on "up" — more lanes is more simultaneous pressure, but
+  the horde never surrounds the board or arrives from the sides/bottom
 - The board is combat-only during a wave: tapping a Construct mid-fight shows
   a read-only status readout (name, blurb, live HP) instead of Move/Sell
 - A fresh run (via defeat → "Begin again") resets gold as well as the board —

@@ -45,6 +45,13 @@ export class Placement {
   onMessage: ((text: string, ok: boolean) => void) | null = null
   /** Screen position of an in-flight drag, for the DOM chip that follows the finger. */
   onDragMove: ((clientX: number, clientY: number) => void) | null = null
+  /**
+   * Fires once a fresh purchase actually lands on a tile — distinct from
+   * `onChange`'s return to 'idle', which also covers a cancelled or mistapped
+   * attempt where nothing was built. Callers that need to know whether a
+   * placement *succeeded*, not just that it ended, should use this instead.
+   */
+  onPlaced: ((defId: BuildingId) => void) | null = null
 
   constructor(
     private readonly registry: BuildingRegistry,
@@ -213,6 +220,7 @@ export class Placement {
       }
       this.registry.place(state.defId, cell)
       this.onMessage?.(`${def.name} raised · -${def.cost}g`, true)
+      this.onPlaced?.(state.defId)
     } else {
       this.registry.drop(state.building, cell)
       this.onMessage?.(`${state.building.def.name} moved`, true)

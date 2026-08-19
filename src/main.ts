@@ -23,7 +23,7 @@ import { ActorView } from './view/ActorView'
 import { ProjectileView } from './view/ProjectileView'
 import { Category } from './sim/World'
 import { GameOverPanel } from './ui/GameOverPanel'
-import { ShopPanel } from './ui/ShopPanel'
+import { ShopDock } from './ui/ShopDock'
 import { DragChip } from './ui/DragChip'
 import { DebugOverlay } from './ui/DebugOverlay'
 import { Hud } from './ui/Hud'
@@ -127,6 +127,8 @@ const debug = new DebugOverlay(topRegion)
 const toast = new Toast(bottomRegion)
 const inspect = new InspectPanel(bottomRegion)
 
+const shopDock = new ShopDock(bottomRegion)
+
 const readyBtn = document.createElement('button')
 readyBtn.className = 'ready'
 readyBtn.addEventListener('click', startWave)
@@ -137,7 +139,6 @@ devBar.className = 'dev-bar'
 bottomRegion.append(devBar)
 
 const gameOver = new GameOverPanel(uiRoot)
-const shopPanel = new ShopPanel(uiRoot)
 const dragChip = new DragChip()
 
 hud.setWave(wave)
@@ -149,47 +150,59 @@ economy.onChange = (gold) => {
   hud.setGold(gold)
   // A placement in flight may have just become unaffordable.
   placement.revalidate()
-  if (shop.isOpen) shopPanel.syncGold(gold)
+  shopDock.syncGold(gold)
 }
+
+// A purchase arms Placement the same way a tray card once did. The slot is
+// only marked "Built" once Placement confirms it actually landed on a tile —
+// a mistap or a cancelled drag must leave the slot buyable, not falsely
+// marked sold.
+let pendingShopIndex = -1
 
 placement.onMessage = (text, ok) => toast.show(text, ok)
 placement.onDragMove = (x, y) => dragChip.move(x, y)
+placement.onPlaced = () => {
+  if (pendingShopIndex >= 0) shop.markBought(pendingShopIndex)
+  pendingShopIndex = -1
+}
 placement.onChange = (state) => {
   dragChip.sync(state)
+  shopDock.setArmed(state.kind === 'placing' ? state.defId : null)
   if (state.kind !== 'idle') {
     selectMarker.hide()
     hoverMarker.hide()
     inspect.hide()
+    return
   }
+  pendingShopIndex = -1
+  shop.refresh()
 }
 
-// --- shop ---------------------------------------------------------------
+// --- shop -----------------------------------------------------------------
+// Docked at the bottom for the whole Prep period, not a modal — the board
+// stays visible the entire time. Visibility is owned by the same handful of
+// call sites that already drive the run's phase, not polled every frame.
 
-shop.onOfferChanged = (offer, rerollCost) => shopPanel.show(wave, offer, rerollCost, economy.gold)
+shop.onOfferChanged = (offer, bought, rerollCost) => shopDock.show(offer, bought, rerollCost, economy.gold)
 shop.onMessage = (text, ok) => toast.show(text, ok)
 
-shopPanel.onBuyTap = (index) => {
+shopDock.onBuyTap = (index) => {
   const id = shop.currentOffer[index]
   if (id === undefined) return
-  shop.choose()
-  shopPanel.hide()
+  pendingShopIndex = index
   placement.beginPurchaseHold(id)
 }
-shopPanel.onBuyDrag = (index, event) => {
+shopDock.onBuyDrag = (index, event) => {
   const id = shop.currentOffer[index]
   if (id === undefined) return
-  shop.choose()
-  shopPanel.hide()
+  pendingShopIndex = index
   placement.beginPurchaseDrag(id, event)
 }
-shopPanel.onReroll = () => shop.reroll()
-shopPanel.onSkip = () => {
-  shop.skip()
-  shopPanel.hide()
-}
+shopDock.onReroll = () => shop.reroll()
 
 function openShop(): void {
   shop.open(wave)
+  shopDock.setVisible(true)
 }
 
 // --- run flow -----------------------------------------------------------
@@ -218,6 +231,7 @@ sim.events.onWaveCleared = (cleared) => {
 
 sim.events.onDefeat = () => {
   hud.setProgress(null)
+  shopDock.setVisible(false)
   gameOver.show(sim.wave)
 }
 
@@ -229,15 +243,16 @@ function advanceWave(): void {
   if (changed.length > 0) expandBoard()
 }
 
-/** True once the shop is resolved, nothing is being placed, and combat isn't running. */
+/** True once nothing is being placed and combat isn't running. */
 function canStartWave(): boolean {
-  return sim.phase !== SimPhase.Running && !shop.isOpen && !placement.isActive
+  return sim.phase !== SimPhase.Running && !placement.isActive
 }
 
 function startWave(): void {
   if (!canStartWave()) return
   inspect.hide()
   selectMarker.hide()
+  shopDock.setVisible(false)
   sim.startWave(wave)
   toast.show(`Wave ${wave} approaches`, false)
 }
@@ -362,9 +377,7 @@ function syncReadyButton(): void {
     ? `Begin Wave ${wave}`
     : sim.phase === SimPhase.Running
       ? 'The wave rages on'
-      : shop.isOpen
-        ? 'Resolve the shop'
-        : 'Place your Construct'
+      : 'Place your Construct'
   if (label === readyLabel) return
   readyLabel = label
   readyBtn.textContent = label
@@ -436,7 +449,22 @@ openShop()
 // false in a production build, so this whole block is stripped from the bundle.
 if (import.meta.env.DEV) {
   Object.assign(window, {
-    game: { sim, grid, registry, economy, shop, rig, loop, gridView, enemyView, unitView, projectileView, startWave, restartRun },
+    game: {
+      sim,
+      grid,
+      registry,
+      economy,
+      shop,
+      placement,
+      rig,
+      loop,
+      gridView,
+      enemyView,
+      unitView,
+      projectileView,
+      startWave,
+      restartRun,
+    },
   })
 }
 

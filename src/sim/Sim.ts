@@ -15,6 +15,25 @@ import { Category, DamageType, EntityFlag, MAX_ENTITIES, Team, World } from './W
 
 /** How far outside the board's edge the horde forms up. */
 const SPAWN_MARGIN = 2.2
+/**
+ * World angle that renders at the top of the screen.
+ *
+ * The camera sits at +Z looking toward -Z (CameraRig), so -Z is what's
+ * furthest from it and reads as "up" on a pitched-down view — confirmed by
+ * projecting both directions through the live camera matrices rather than
+ * assumed from the setup code. `angle` here is measured the same way
+ * `HexLayout`/spawn code already does: `sin(angle)` on X, `cos(angle)` on Z.
+ */
+const TOP_ANGLE = Math.PI
+/**
+ * Total angular width of the top approach, in radians (~130°).
+ *
+ * Enemies never spawn outside this band — it is what makes "always from the
+ * top" true at every lane count, not just the default one. Wide enough that
+ * six lanes still read as distinct columns, narrow enough that even the
+ * widest wave stays clear of the board's left/right/bottom edges.
+ */
+const APPROACH_WIDTH = (130 * Math.PI) / 180
 /** Distance from the board centre at which an enemy can strike the Eldree. */
 const ELDREE_REACH = 0.85
 /** Speed multiplier while forcing a path across a tile with a Construct on it. */
@@ -81,8 +100,8 @@ export class Sim {
   private rng: Rng
   private pending: PendingGroup[] = []
   private elapsed = 0
-  private arcs = 1
-  private arcCursor = 0
+  private lanes = 1
+  private laneCursor = 0
   private spawnedTotal = 0
   private waveTotalCount = 0
   private killedTotal = 0
@@ -203,8 +222,8 @@ export class Sim {
   startWave(wave: number): void {
     const def = waveDef(wave)
     this.wave = wave
-    this.arcs = def.arcs
-    this.arcCursor = 0
+    this.lanes = def.lanes
+    this.laneCursor = 0
     this.elapsed = 0
     this.spawnedTotal = 0
     this.killedTotal = 0
@@ -288,10 +307,14 @@ export class Sim {
     const id = this.world.spawn()
     if (id < 0) return
 
-    // Arcs are visited round-robin so a wave arrives evenly on every front,
-    // then jittered so the horde does not form a single-file column.
-    const arc = this.arcCursor++ % this.arcs
-    const angle = (arc / this.arcs) * Math.PI * 2 + this.rng.range(-0.28, 0.28)
+    // Lanes are visited round-robin so a wave arrives evenly across the top
+    // approach, then jittered so the horde does not form single-file columns.
+    // A single lane sits dead centre; more lanes spread evenly outward from
+    // there, always inside APPROACH_WIDTH, so the horde never wraps around
+    // to the board's sides or back.
+    const lane = this.laneCursor++ % this.lanes
+    const t = this.lanes <= 1 ? 0.5 : lane / (this.lanes - 1)
+    const angle = TOP_ANGLE - APPROACH_WIDTH / 2 + t * APPROACH_WIDTH + this.rng.range(-0.1, 0.1)
     const distance = this.grid.visibleWorldRadius + SPAWN_MARGIN + this.rng.range(0, 1.4)
 
     const w = this.world
