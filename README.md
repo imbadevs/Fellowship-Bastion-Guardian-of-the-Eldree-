@@ -131,10 +131,11 @@ game.sim.waveProgress
   nothing is mid-placement and combat isn't running
 - Wave clear grants a gold bonus and partially heals the Eldree, then the shop
   dock reopens automatically; it hides again the instant a wave starts
-- The Shadow Army always approaches from the top of the board. `WaveDef.lanes`
-  (1–6) spreads the horde across evenly-spaced columns within a fixed
-  ~130° band centred on "up" — more lanes is more simultaneous pressure, but
-  the horde never surrounds the board or arrives from the sides/bottom
+- The Eldree sits at the board's centre with no inherent front — the Shadow
+  Army attacks from every direction. `WaveDef.lanes` (1–6) spreads the horde
+  across evenly-spaced directions around the full circle, the main pressure
+  dial: the same enemy count surrounding the board from six sides is a very
+  different problem than the same count funnelling in from one
 - The board is combat-only during a wave: tapping a Construct mid-fight shows
   a read-only status readout (name, blurb, live HP) instead of Move/Sell
 - A fresh run (via defeat → "Begin again") resets gold as well as the board —
@@ -144,3 +145,58 @@ game.sim.waveProgress
 
 The run loop is real and playable end to end: shop → place → ready → fight →
 reward → shop, indefinitely, with no scripted wave cap.
+
+**Merging** — three ways in, for different situations. The four spawner
+families have a tier-2 upgrade (Barracks/War Lodge, Archery Range/Bowspire,
+Knight's Hall/Bastion Keep, Mage Spire/Arcane Obelisk); defensive structures
+have no tier-2 yet, so they're never mergeable.
+
+- *Buy straight into an upgrade* — drag a shop card and drop it directly onto
+  a matching Construct already on the board (or tap the card, then tap that
+  Construct). The ghost preview turns violet and shows the tier-2 shape
+  instead of red "occupied", since dropping there is a valid, different
+  action. Costs exactly what the card costs standing alone — the existing
+  Construct was already paid for when it went up, so the merge itself adds no
+  further toll.
+- *Drag one built Construct onto another, for free* — press and hold a
+  mergeable Construct on the board; after a beat (~380ms) it picks up, every
+  eligible partner on the board lights up violet, and dropping it on one
+  merges them. A quick drag starting on the same tile still pans the camera
+  as normal — only a press that stays still past the hold delay counts as a
+  pickup, which is what makes the two gestures coexist on the same tile
+  without one stealing the other. No gold changes hands.
+- *Combine two you already own, via a menu* — tap a built Construct; if a
+  match exists elsewhere and it has an upgrade, the InspectPanel offers
+  "Merge" alongside Move/Sell, highlighting every eligible partner the same
+  way. Also free — this and the drag above are the same underlying action,
+  just two different ways to start it.
+
+Both are hidden during combat, like Move and Sell. And both carry the
+combined garrison into the upgrade — a merge is raising a bigger Construct,
+not losing one, so it does not muster from zero. Survivors beyond the new
+roster cap (two full Barracks is 6 Warriors; a War Lodge only holds 5) have
+no slot to keep and are released; anything that fits transfers and keeps
+fighting through the transition.
+
+**Cooldown bars** — every Construct with a timer (spawn interval for
+spawners, attack cooldown for turrets) shows a small charge-up bar floating
+just above its roofline: empty right after a spawn/shot, full and ready when
+it fires again. Positioned per building using a measured, not hand-authored,
+height (`buildingHeight` in `BuildingShapes.ts`), so it can never drift out
+of sync with a shape that gets retuned later. One InstancedMesh pair (track +
+fill) for the whole board — a flat 2 extra draw calls whether 1 Construct is
+built or 60. Defensive structures with neither a spawner nor a
+weapon (Palisade, Healing Shrine) show no bar, since there is no cooldown to
+show. Also fixed alongside this: a freshly placed Construct's first spawn now
+waits a full cooldown like every one after it, instead of the old 35%
+head-start — the bar reads correctly against that real timing.
+
+**Camera reframed for an omnidirectional attack.** With the horde attacking
+from every side again, the board is framed close to centred (`FRAME_BIAS`
+settled at a modest +0.16 — enough to leave room for the bottom-docked shop,
+without favouring "up" the way the top-only design briefly did). The fit
+distance still folds in a smaller `APPROACH_VISIBILITY` margin beyond the
+board's own edge so nearby spawns read as on-screen sooner — though with
+attacks coming from everywhere at once, no single framing can keep the whole
+spawn ring visible simultaneously the way a one-directional design could;
+that is an inherent trade-off of going wide rather than a bug to chase.

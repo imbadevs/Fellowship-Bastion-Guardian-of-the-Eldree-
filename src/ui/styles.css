@@ -4,6 +4,7 @@
   --gold: #f2c464;
   --bad: #ff7a5c;
   --good: #7fe08c;
+  --merge: #c98cff;
   --panel: rgba(12, 16, 22, 0.86);
   --line: rgba(255, 255, 255, 0.1);
   --safe-top: env(safe-area-inset-top, 0px);
@@ -137,6 +138,7 @@ html, body {
 }
 
 .inspect-actions .danger { color: var(--bad); }
+.inspect-actions .merge { color: var(--merge); border-color: rgba(201, 140, 255, 0.35); }
 .inspect-actions .ghost { flex: 0 0 72px; color: var(--ink-dim); }
 
 .dev-bar { display: flex; gap: 6px; flex-wrap: wrap; }

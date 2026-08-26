@@ -3,10 +3,11 @@ import { EnemyKind } from './enemies'
 /**
  * Wave schedule.
  *
- * The horde always approaches from the top of the board. `lanes` is how many
- * evenly-spaced columns span that approach, which is the main pressure dial:
- * the same enemy count spread across six lanes is a very different defensive
- * problem than the same count funnelling down one.
+ * The Eldree sits at the board's centre with no inherent front — the horde
+ * attacks from all sides. `lanes` is how many evenly-spaced directions it
+ * arrives from, which is the main pressure dial: the same enemy count
+ * surrounding the board from six directions is a very different defensive
+ * problem than the same count funnelling in from one.
  */
 export interface SpawnGroup {
   readonly kind: EnemyKind

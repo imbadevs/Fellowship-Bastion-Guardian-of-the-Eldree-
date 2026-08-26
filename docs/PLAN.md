@@ -643,3 +643,373 @@ click silently no-ops if no render frame has landed yet to lift the
 `disabled` attribute. Both resolved by pausing the loop (`loop.paused = true`)
 before manual stepping, or calling the underlying function (`game.startWave()`)
 directly instead of racing the DOM.
+
+---
+
+## Appendix J — merging Constructs into their tier-2 upgrade
+
+Added on request: two matching Constructs combine into the family's tier-2
+building. The four spawner pairs (Barracks/War Lodge, Archery Range/Bowspire,
+Knight's Hall/Bastion Keep, Mage Spire/Arcane Obelisk) already existed as
+separate tier-1/tier-2 `BuildingId`s from M2 — merging only needed an explicit
+`upgradesTo` link between them, not new content.
+
+**Reused the Placement state machine rather than building a parallel one.**
+`PlacementState` gained a fourth variant, `'merging'`, alongside
+`placing`/`moving`/`idle`. This bought the whole cancel/tap/toast contract for
+free — a merge in progress is armed, cancellable (Escape or tapping empty
+ground), and forgiving of mistaps (an on-board tap that doesn't match stays
+armed with an error, exactly like an invalid placement does) — without writing
+any of that machinery a second time. The mechanical merge itself is three
+calls to already-tested `BuildingRegistry` methods: `remove(source)`,
+`remove(target)`, `place(upgradeId, targetCell)` — no new registry or sim
+primitives.
+
+**Merge is tap-only, deliberately, for the same reason Move already is.**
+M2's Move never supported dragging an existing Construct because a
+board-originated drag races the camera-pan gesture (documented on
+`InspectPanel` from the start). Merge inherits that constraint outright:
+tap a Construct, tap Merge, tap a highlighted partner.
+
+**Eligible targets get their own highlight, because Placement's existing
+preview can't fire for a tap-only interaction.** The ghost/marker preview in
+`Placement.preview()` only runs from `trackPointer()`, which only fires during
+an active drag — irrelevant here. `MergeHighlight` is a small pooled set of
+`TileMarker`s shown all at once the instant merge mode arms, computed by
+`registry.ofType(source.def.id)` filtered against the source's own id. This
+also fixes the discoverability problem a single hover marker would have had:
+the player sees every valid option immediately, not just whichever tile they
+happen to be touching.
+
+**Free, not discounted.** Two tier-1s cost more in total than merging saves
+on the eventual tier-2 (the discount ranges from 20% for Barracks down to 0%
+for Mage Spire, an artifact of prices set before merge existed) — rebalancing
+all eight prices to a consistent discount was judged out of scope for this
+ask. Merging costs nothing beyond what was already spent on the two
+tier-1s, matching the mobile-merge-game mental model of "combine what you
+have" rather than introducing a new toll.
+
+**One real methodology trap while verifying, caught before it became a false
+bug report.** A before/after test comparing live units by `ownerId === simId`
+showed apparent "orphaned" units surviving a merge — alarming, until checking
+whether `World`'s id free-list had reused the just-freed `simId` for the
+merged Construct itself (it had: `merged.simId === b.simId`), so the "leak"
+was the merged Construct's own legitimate new unit matching a stale id
+comparison, not a leftover from the old one. Isolating a single
+`registry.remove()` and checking the exact same entity id before/after (no
+second Construct in play to trigger recycling) confirmed teardown is clean:
+the owned unit dies in the same call that removes its Construct.
+
+Verified: highlight shows exactly the eligible partner(s), excluding the
+source and any non-upgradeable defensive structures; self-tap and mismatched
+taps stay armed with an error; Escape/off-board cancels with no state
+change; a successful merge is free, removes both sources, and the resulting
+Construct's garrison musters correctly; Merge is hidden whenever Move/Sell
+are (mid-combat, or no `upgradesTo`, or no eligible partner on the board).
+
+---
+
+## Appendix K — first spawn now waits a full cooldown
+
+`addConstruct` set a freshly placed Construct's spawn timer to 35% of its
+interval, so the first unit arrived well before a normal cooldown cycle would
+allow — a deliberate M4 choice ("garrisons quickly but not instantly") that no
+longer holds. Changed to the full `def.spawn.interval`, matching every spawn
+after it. `spawnerStep` already resets to the full interval post-spawn, so
+this was the only preferential case in the codebase.
+
+Verified per-building: Barracks (6s) held at garrison=0 through t=6s, spawned
+between t=6–7s; Archery Range (7s), Knight's Hall (10s), and Mage Spire (9s)
+each matched their exact interval when checked at t=9.5s (spawned iff
+interval ≤ 9.5s). No change needed to merge, since merged Constructs are
+created through the same `addConstruct` path.
+
+---
+
+## Appendix L — cooldown bars above every Construct
+
+A charge-up bar over each Construct with a timer — spawn interval for
+spawners, attack cooldown for turrets — filling from empty (just spawned/shot)
+to full (ready again).
+
+**Reconciling with the M4 decision to skip per-unit health bars.** The
+project deliberately avoided a floating health bar per unit body (hurt-tint
+covers that instead, cheap and legible at board zoom, README/PLAN already
+document why). This is a different case, not a reversal of that call: it's
+capped at Construct count (≤61) rather than the hundreds of units/enemies the
+original decision was about, and it shows information — cooldown timing —
+that has *no* existing visual representation at all, where health already
+does via tint. Both the scale and the information gap are different from what
+was ruled out.
+
+**Fixed camera, so no per-frame billboard math.** Because CameraRig's pitch
+never changes at runtime, "face the camera" is a single rotation baked into
+the bar geometry once at construction (`Euler(-PITCH, 0, 0)`), not a per-frame
+lookAt. `PITCH` is now exported from `CameraRig` rather than redefined locally
+— a duplicated copy would silently drift if the angle is ever retuned, and
+nothing would catch it since the failure mode is "bars point the wrong way",
+not a type error.
+
+**Fill grows from a fixed edge via a pivot trick, not per-frame repositioning.**
+The fill quad's geometry is translated so its local origin sits at its own
+left edge (`fillGeo.translate(BAR_WIDTH / 2, 0, 0)`); scaling `scale.x` by
+`progress` then grows it rightward from that fixed point for free, needing
+only a one-time position offset (`-BAR_WIDTH/2` from the bar's anchor) rather
+than recomputing position every frame to keep the left edge pinned as it grows.
+
+**Height is measured, not hand-tuned, and this caught its own bug during
+verification.** First pass used one fixed Y-offset (2.15) clearing the
+tallest Construct (Mage Spire, ~1.95) — correct for tall buildings, but it
+left short ones (Ballista, ~0.67) with their bar floating visibly disconnected
+above them, reading as "belongs to the Eldree" rather than "belongs to this
+turret" in a screenshot. Fixed by adding `buildingHeight()` — reads the
+already-fitted geometry's bounding box (`computeBoundingBox().max.y`), cached
+per type — so each bar sits a fixed small margin above its *own* building's
+actual roofline. Reusing the geometry as the source of truth, the same
+approach `fitToTile` already uses, means the bar can never drift out of sync
+with a shape that gets retuned later, unlike a hand-authored height table
+would.
+
+**The spawn-timing fix from the previous request made this feature's numbers
+honest.** Cooldown bars would have been showing progress against a lie if the
+first-spawn 35%-head-start bug (Appendix K) were still in place — the bar
+would read "nearly full" moments after a Construct was raised, not matching
+when the unit actually arrived. Fixing the timing bug first meant the bar
+didn't need any compensating logic of its own.
+
+Verified: bars sit correctly above their own building at both close and
+board-wide zoom; draw calls are a flat +2 regardless of Construct count (8
+total with 3 buildings, 17 total at 60 — full board capacity, one under the
+61-instance pool); a fully-idle turret with no target shows full (matches
+`attackStep`'s actual behaviour — cooldown ticks down even without a target,
+so it sits "ready" while idle, which is correct, not a bug); Palisade and
+Healing Shrine (no `spawn`, no `weapon`) correctly show no bar at all.
+
+---
+
+## Appendix M — camera reframed: bottom-anchored board, top approach visible
+
+Requested directly: zoom out, and move the board down-screen so the top band
+— where the horde always enters, since the top-lanes change — has room to
+actually show the approach, not just the moment enemies reach the board edge.
+
+**`FRAME_BIAS` flipped, not just retuned.** It was `+0.42`, pushing the board
+*up*-screen to leave room for the old full-screen shop's bottom band. Since
+that shop is now a compact persistent dock (this session, earlier), the
+bottom no longer needs nearly that much room — freeing it to flip the other
+way. Now `-0.6`, pushing the board *down* so the top gets the space instead.
+
+**"Zoom out" needed a second change beyond the bias, or spawns would still be
+invisible.** `fitBoard()` only ever sized the camera to the board's own
+radius — comfortable margin for the board itself, but enemies spawn
+`SPAWN_MARGIN` (2.2 world units, plus jitter) *beyond* that edge, meaning a
+freshly spawned enemy was very likely fully outside the frustum regardless of
+which way the board was biased. Added `APPROACH_VISIBILITY = 3.4`, folded
+into the fit-distance calculation only (not into `this.boardRadius` itself,
+which fog and the pan limit still key off) — so the frustum now comfortably
+contains the spawn ring, not just the board.
+
+**Verified two different things, not just "it looks right":** a full NDC
+projection check confirmed every live enemy stayed within `[-1, 1]` on both
+axes from the instant it spawned (0.5s into a 6-lane wave through 2s in, 4
+enemies checked, zero off-screen) — this is the actual claim "visible from
+the top" makes, not just a visual impression from one screenshot. Separately,
+confirmed the board's own expansion (`visibleRing`/`visibleCells`/
+`visibleWorldRadius`) and tile-tap placement both still resolve correctly at
+the new, wider framing — the camera math changed, not the picking or grid
+logic, but both were re-verified rather than assumed unaffected.
+
+---
+
+## Appendix N — merge, corrected: drag a purchase onto an existing building
+
+The Appendix J merge (tap a built Construct, tap Merge, tap a matching
+partner) wasn't what was actually wanted. The real ask: drag a shop card
+straight onto a matching Construct already on the board, merging them in one
+motion — no need to have two already placed first. Both mechanics are kept,
+since they serve genuinely different situations (see README), but this is
+now the headline path.
+
+**Occupied-but-matching had to become a third outcome, not a shade of
+"valid".** `Placement.check()` previously had exactly two outcomes for a
+purchase drop: empty tile (buildable) or occupied (rejected). A tile occupied
+by a *matching, upgradeable* Construct is now a third case — valid, but not a
+fresh placement. `GhostView.show()`'s boolean `valid` became a `'valid' |
+'invalid' | 'merge'` union, with the ghost showing the *upgrade's* geometry
+during a merge preview, not the card being dragged — the player sees what
+they're about to get, not what they're holding. Getting this preview right
+mattered as much as the mechanic itself: without it, a valid merge drop would
+have shown the same red "occupied" tint as a real failure, actively telling
+the player the correct action was wrong.
+
+**A real ordering bug caught before it shipped, not after.** First pass
+detected the merge target and dispatched straight to `commitPurchaseMerge()`
+*before* running it through the shared `check()`/error-handling block — which
+meant the "stay armed so a tap mistap doesn't cost you anything" forgiveness
+every other path gets was silently skipped for merges specifically. An
+unaffordable merge attempt from a *tap* would cancel outright instead of
+staying armed like an unaffordable normal placement does. Caught by testing
+the exact failure case (drain gold mid-arm, then tap) rather than only the
+happy path — moving the merge dispatch to *after* `check()` (which already
+had the merge-target affordability rule folded in) fixed it: `check()` now
+gates uniformly for both outcomes, and only a confirmed-OK drop branches into
+either the merge or the normal build.
+
+**Cost model, confirmed consistent with the free tap-merge.** Buying card
+into an existing Construct costs exactly the card's standalone price — e.g.
+two Barracks via this path costs 60g (existing, paid earlier) + 60g (new
+card) = 120g total, identical to the tap-merge path's total spend for the
+same outcome. The mechanics differ in *when* you commit to merging, not in
+what it costs.
+
+Verified: drag-drop and tap-drop onto a match both merge correctly; ghost
+shows violet + the tier-2 shape while hovering a valid target; a mismatched
+type and a same-type-no-upgrade target (Palisade) both still reject normally
+as "occupied"; unaffordable-via-tap now correctly stays armed, unaffordable-
+via-drag still cancels (matching the pre-existing asymmetry the rest of the
+class already has); the original tap-select-two-existing-buildings path is
+unaffected and still free.
+
+---
+
+## Appendix O — merge was silently wiping the garrison it should have upgraded
+
+Reported directly: after a merge, the units reset. Confirmed by direct
+measurement before touching any code — two fully-mustered Barracks (6
+Warriors total) merged into a War Lodge came out with a garrison of **0**,
+forced to muster its entire roster from scratch. A merge framed as an
+upgrade was, mechanically, strictly worse than doing nothing for the next
+~20 seconds.
+
+**Root cause was architectural, not a one-line typo.** Both merge paths
+built the upgrade out of the same two primitives every other placement uses:
+`registry.remove(x)` then `registry.place(upgradeId, cell)`. Those fire
+`onRemoved`/`onPlaced`, which the registry↔sim wiring in `main.ts` maps to
+`sim.removeConstruct()` (which **always** kills the garrison — correct for a
+sale, wrong for a merge) and `sim.addConstruct()` (which **always** starts a
+roster at zero). Reusing generic primitives for a specific transition lost
+the information that this removal-and-placement pair was actually one
+event, not two independent ones.
+
+**Fix threads a merge through as a single event, end to end.** Added
+`BuildingRegistry.merge(sources, upgradeId, cell)` — same tile/map
+bookkeeping as `remove`+`place`, but firing a new `onMerged(sources, result)`
+hook instead of the generic pair. `main.ts` wires that hook to a new
+`Sim.mergeConstructs(sourceSimIds, upgradeDef, cell)`, which snapshots every
+surviving unit owned by *either* source before tearing the Construct entities
+down (not their garrisons), then re-homes as many as the new roster holds
+onto the upgrade — reusing `writeStation` so transferred units re-station
+around the *new* Construct's position rather than staying pinned to
+wherever the old one stood. Anything beyond the new cap is released, since
+there is no slot left to hold it.
+
+**One method serves both merge paths**, not two near-duplicates: passing a
+one-element `sourceSimIds` array (the drag-a-purchase-onto-an-existing-
+Construct path, where the "new half" never existed as a live entity to have
+a garrison of its own) and a two-element array (the free tap-two-existing-
+Constructs path) both flow through the same transfer logic.
+
+Verified: 2 Barracks (6 Warriors) → War Lodge (cap 5) carries exactly 5,
+releases 1; 2 Knight's Halls (2 total) → Bastion Keep (cap 2) and 2 Mage
+Spires (2 total) → Arcane Obelisk (cap 2) are both exact fits, losing none;
+the drag-purchase path correctly carries an existing Construct's garrison
+into the upgrade too; a normal **sell** (not a merge) still fully releases
+its garrison, confirming `removeConstruct`'s ordinary behaviour is
+untouched; transferred units visually re-station in formation around the
+new Construct rather than clumping at the old position; the mismatched-type
+and same-type-no-upgrade rejection cases from Appendix N still hold.
+
+---
+
+## Appendix P — merging by dragging one board building onto another
+
+The third and final merge trigger requested: pick up an already-placed
+Construct and drag it onto another one, directly on the board. This is
+exactly the gesture M2's Move deliberately avoided — "a drag starting on the
+board would race the camera pan gesture" — so making it work meant solving
+that conflict properly rather than reopening the old trade-off blind.
+
+**Hold-delay disambiguation, not a new gesture zone.** A quick drag starting
+anywhere on the board, including directly on a built tile, still pans the
+camera exactly as before — that path is completely unchanged. Only a press
+that stays within `TAP_SLOP` for `LONG_PRESS_MS` (380ms) on a tile
+`InputController` is told is a merge candidate becomes a pickup; panning is
+suppressed only for that brief wait, and only on tiles flagged as candidates
+(a Construct with an upgrade and an existing match — the same rule the other
+two merge paths already use), not the whole board. Getting this wrong in
+either direction would have broken something real: too eager, and normal
+panning from a built tile stutters or hijacks; too conservative, and the
+pickup never fires.
+
+**The mechanic itself needed zero new code.** `Placement.beginMerge()` and
+`commitMerge()` already existed from the InspectPanel path (Appendix J) and
+already carry the garrison-preserving fix (Appendix O) — this only needed a
+new *trigger*. `beginMerge()` gained a `dragging` flag so a failed drop
+cancels outright instead of silently staying armed (the finger has already
+lifted; there is nothing left to stay armed *for*), matching how every other
+drag in the class already behaves. `InputController` gained the hold-timer
+and four callbacks (`onBuildingDragCandidate/Start/Move/End`); `main.ts`
+wires them to the exact same `beginMerge`/`tapAt` calls the InspectPanel
+button already used.
+
+**A test-harness trap, not a real bug, cost the most time here.** The first
+attempt at verifying this reported total failure — long-press never armed,
+state stayed idle no matter how long the wait. `canvas.setPointerCapture()`
+was the culprit, but not in the product code: it throws `NotFoundError` for
+a synthetic `PointerEvent` whose `pointerId` was never associated with a
+real active pointer session, and `onPointerDown` calls it as its first line,
+aborting the whole handler silently before the hold timer was ever armed.
+Pointer id `1` — this session's persistent virtual mouse pointer — works;
+any other id doesn't. Confirmed directly (`canvas.setPointerCapture(1)`
+succeeds, `setPointerCapture(7)` throws) before concluding anything about
+the feature itself, and every earlier test this session had used id `1`
+already, which is exactly why they'd all passed.
+
+Verified: long-press-then-drag onto a match merges for free, garrison
+carried over; a quick drag from the same tile still pans (camera target
+confirmed moved, no state change); dropping on a mismatched building or off
+the board both cancel outright (not stay-armed, matching the new `dragging`
+flag); a lone Construct with no match never arms the pickup at all; the
+violet highlight lights only the eligible target, never the source being
+dragged; picking up is refused outright during a running wave, matching
+Move/Sell/the other merge paths; ordinary quick-tap selection is unaffected.
+
+---
+
+## Appendix Q — reverted to omnidirectional attacks
+
+On reflection, requested back: the Eldree stays at the board's centre (always
+was), but the Shadow Army should attack from every side again, not just the
+top. This walks back the top-lanes change from a few turns ago toward the
+original concept ("Hordes of the Shadow Army attack from all sides").
+
+**The spawn-angle change was a clean revert.** `Sim.spawnEnemy` drops the
+`TOP_ANGLE`/`APPROACH_WIDTH` band entirely and goes back to distributing
+`lanes` evenly around the full circle (`(lane / lanes) * 2π + jitter`) — the
+exact formula from before the top-only change, just kept under the `lanes`
+naming rather than reverting that too, since "how many arrival directions"
+reads the same either way.
+
+**The camera framing needed real tuning, not just an undo.** Reverting
+`FRAME_BIAS` to its old +0.42 would have been wrong — that value was sized
+for the old full-screen shop's much bigger bottom band, which no longer
+exists (the shop is a compact dock now). Landed on a small +0.16: enough to
+acknowledge the dock still occupies some bottom space, without meaningfully
+favouring one direction now that the horde has no "front" to favour.
+`APPROACH_VISIBILITY` dropped from 3.4 to 2.4 for the same reason the old
+value doesn't apply anymore — it was sized to guarantee full visibility of
+one specific band, which is no longer the goal; a smaller general margin
+just keeps nearby spawns from popping in from a fully-cropped edge.
+
+**One trade-off is now inherent, not a bug to chase:** a portrait phone
+screen cannot show a full 360° spawn ring at once at a legible zoom level.
+Some spawns, in whichever direction the player isn't currently looking, will
+be off-screen until they close some distance — this is the accepted cost of
+"attacks from everywhere" over "attacks from one legible direction," and
+matches how most 360°-threat tower-defense games actually play (peripheral
+awareness and the wave-progress HUD substitute for full visibility).
+
+Verified: enemies confirmed spawning from multiple directions in the same
+wave (top and bottom both visible in a single screenshot, 6-lane wave); the
+board reads centred rather than pinned to one edge at both close and
+board-wide zoom; typecheck, build, and dev-handle stripping all clean.

@@ -8,9 +8,11 @@ import { TileMarker } from './view/TileMarker'
 import { Eldree } from './view/Eldree'
 import { InputController } from './view/InputController'
 import { BuildingView } from './view/BuildingView'
+import { CooldownBarView, type CooldownEntry } from './view/CooldownBarView'
+import { buildingHeight } from './view/BuildingShapes'
 import { GhostView } from './view/GhostView'
 import { Economy } from './game/Economy'
-import { BuildingRegistry } from './game/Buildings'
+import { BuildingRegistry, type PlacedBuilding } from './game/Buildings'
 import { Placement } from './game/Placement'
 import { Shop } from './game/Shop'
 import { Sim, SimPhase } from './sim/Sim'
@@ -22,6 +24,7 @@ import { unitGeometry } from './view/UnitShapes'
 import { ActorView } from './view/ActorView'
 import { ProjectileView } from './view/ProjectileView'
 import { Category } from './sim/World'
+import { MergeHighlight } from './view/MergeHighlight'
 import { GameOverPanel } from './ui/GameOverPanel'
 import { ShopDock } from './ui/ShopDock'
 import { DragChip } from './ui/DragChip'
@@ -58,6 +61,8 @@ renderer.scene.add(hoverMarker.mesh, selectMarker.mesh, placeMarker.mesh)
 const ghost = new GhostView()
 renderer.scene.add(ghost.mesh)
 
+const mergeHighlight = new MergeHighlight(renderer.scene, grid.size)
+
 rig.fitBoard(grid.visibleWorldRadius)
 rig.reset()
 
@@ -66,6 +71,7 @@ rig.reset()
 const economy = new Economy(400)
 const registry = new BuildingRegistry(grid)
 const buildingView = new BuildingView(renderer.scene, registry)
+const cooldownBars = new CooldownBarView(renderer.scene, 61)
 
 const sim = new Sim(grid, RUN_SEED)
 const enemyView = new ActorView(renderer.scene, grid, {
@@ -95,6 +101,16 @@ registry.onRemoved = (building) => {
 }
 registry.onMoved = (building) => {
   sim.moveConstruct(building.simId, building.cell)
+}
+// A merge is one transition, not a removal followed by a placement — routed
+// separately so the sim can carry the combined garrison into the upgrade
+// instead of releasing it and mustering the new Construct from zero.
+registry.onMerged = (sources, result) => {
+  result.simId = sim.mergeConstructs(
+    sources.map((s) => s.simId),
+    result.def,
+    result.cell,
+  )
 }
 
 // The sim can destroy a Construct (hp reaches 0) independently of the player
@@ -168,6 +184,19 @@ placement.onPlaced = () => {
 placement.onChange = (state) => {
   dragChip.sync(state)
   shopDock.setArmed(state.kind === 'placing' ? state.defId : null)
+
+  if (state.kind === 'merging') {
+    // Merging is tap-only, so there is no hover-driven preview to lean on —
+    // every eligible partner needs to light up the moment merge mode arms.
+    const matches = registry
+      .ofType(state.source.def.id)
+      .filter((b) => b.entityId !== state.source.entityId)
+      .map((b) => b.cell)
+    mergeHighlight.showAll(matches)
+  } else {
+    mergeHighlight.hideAll()
+  }
+
   if (state.kind !== 'idle') {
     selectMarker.hide()
     hoverMarker.hide()
@@ -280,6 +309,10 @@ inspect.onMove = (building) => {
   selectMarker.hide()
   placement.beginMove(building)
 }
+inspect.onMerge = (building) => {
+  selectMarker.hide()
+  placement.beginMerge(building)
+}
 inspect.onSell = (building) => {
   selectMarker.hide()
   placement.sell(building)
@@ -291,6 +324,12 @@ inspect.onClose = () => selectMarker.hide()
 function describeCell(cell: Cell): string {
   if (cell.state === CellState.Eldree) return 'The Eldree · protect it'
   return `Ring ${cell.ring} · open ground`
+}
+
+/** True once a second Construct of the same kind exists somewhere else to merge with. */
+function canMerge(building: PlacedBuilding): boolean {
+  if (!building.def.upgradesTo) return false
+  return registry.ofType(building.def.id).length > 1
 }
 
 input.onSelect = (cell) => {
@@ -309,9 +348,14 @@ input.onSelect = (cell) => {
 
   if (building) {
     // The board is combat-only while a wave is running: inspection drops to a
-    // read-only status readout instead of offering Move/Sell.
+    // read-only status readout instead of offering Move/Merge/Sell.
     const running = sim.phase === SimPhase.Running
-    inspect.show(building, running ? { hp: sim.world.hp[building.simId], maxHp: sim.world.maxHp[building.simId], readOnly: true } : {})
+    inspect.show(
+      building,
+      running
+        ? { hp: sim.world.hp[building.simId], maxHp: sim.world.maxHp[building.simId], readOnly: true }
+        : { canMerge: canMerge(building) },
+    )
   } else {
     inspect.hide()
     toast.show(describeCell(cell), cell.state === CellState.Open)
@@ -322,6 +366,28 @@ input.onHover = (cell) => {
   if (placement.isActive) return
   if (cell && cell !== selectMarker.current) hoverMarker.show(cell)
   else hoverMarker.hide()
+}
+
+// Long-press a mergeable Construct straight on the board to pick it up, drag
+// it onto a match, and merge — the board-to-board counterpart to dragging a
+// shop card onto an existing Construct. Combat-only board rule applies here
+// too: no picking anything up mid-wave.
+input.onBuildingDragCandidate = (cell) => {
+  if (sim.phase === SimPhase.Running) return false
+  const building = registry.at(cell)
+  return !!building && canMerge(building)
+}
+input.onBuildingDragStart = (cell) => {
+  const building = registry.at(cell)
+  if (!building) return
+  selectMarker.hide()
+  inspect.hide()
+  placement.beginMerge(building, true)
+}
+input.onBuildingDragMove = (x, y) => dragChip.move(x, y)
+input.onBuildingDragEnd = (cell) => {
+  if (placement.state.kind !== 'merging') return
+  placement.tapAt(cell)
 }
 
 // --- dev controls -----------------------------------------------------------
@@ -377,22 +443,61 @@ function syncReadyButton(): void {
     ? `Begin Wave ${wave}`
     : sim.phase === SimPhase.Running
       ? 'The wave rages on'
-      : 'Place your Construct'
+      : placement.state.kind === 'merging'
+        ? 'Choose a merge partner'
+        : 'Place your Construct'
   if (label === readyLabel) return
   readyLabel = label
   readyBtn.textContent = label
   readyBtn.disabled = !ready
 }
 
+/** Clear space between a building's measured roofline and its cooldown bar. */
+const COOLDOWN_BAR_MARGIN = 0.18
+
+/** Reused across frames to avoid a per-frame allocation. */
+const cooldownEntries: CooldownEntry[] = []
+
+/** Gathers spawn/attack cooldown progress for every Construct that has one. */
+function syncCooldownBars(): void {
+  cooldownEntries.length = 0
+  for (const building of registry.all()) {
+    if (building.simId < 0) continue
+    const spawn = building.def.spawn
+    const weapon = building.def.weapon
+
+    let progress: number
+    if (spawn) {
+      progress = 1 - sim.world.spawnTimer[building.simId]! / spawn.interval
+    } else if (weapon) {
+      const interval = sim.world.attackInterval[building.simId]!
+      if (interval <= 0) continue
+      progress = 1 - sim.world.cooldown[building.simId]! / interval
+    } else {
+      continue
+    }
+
+    cooldownEntries.push({
+      worldX: building.cell.worldX,
+      worldZ: building.cell.worldZ,
+      anchorY: building.cell.surfaceY + buildingHeight(building.def.id) + COOLDOWN_BAR_MARGIN,
+      progress,
+    })
+  }
+  cooldownBars.sync(cooldownEntries)
+}
+
 function render(alpha: number, wallDt: number): void {
   enemyView.sync(sim.world, alpha, wallDt)
   unitView.sync(sim.world, alpha, wallDt)
   projectileView.sync(sim.projectiles, alpha)
+  syncCooldownBars()
   if (sim.phase === SimPhase.Running) hud.setProgress(sim.waveProgress)
   eldree.update(wallDt)
   selectMarker.update(wallDt)
   placeMarker.update(wallDt)
   ghost.update(wallDt)
+  mergeHighlight.update(wallDt)
   rig.tick(wallDt)
   renderer.updateFog(rig.cameraDistance, rig.framedRadius)
   renderer.render()
@@ -456,6 +561,7 @@ if (import.meta.env.DEV) {
       economy,
       shop,
       placement,
+      input,
       rig,
       loop,
       gridView,

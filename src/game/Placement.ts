@@ -16,6 +16,8 @@ const TOUCH_PICK_OFFSET = 64
 
 const MARKER_VALID = 0x6ce07a
 const MARKER_INVALID = 0xff5c48
+/** Matches GhostView's merge tint and MergeHighlight's marker colour. */
+const MARKER_MERGE = 0xc98cff
 
 export type PlacementState =
   | { readonly kind: 'idle' }
@@ -26,6 +28,7 @@ export type PlacementState =
       readonly origin: Cell
       dragging: boolean
     }
+  | { readonly kind: 'merging'; readonly source: PlacedBuilding; dragging: boolean }
 
 export type PickFn = (clientX: number, clientY: number) => Cell | null
 
@@ -100,6 +103,25 @@ export class Placement {
     this.onMessage?.(`Tap a tile to move the ${building.def.name}`, true)
   }
 
+  /**
+   * Arms merge-select mode: choose another Construct of the same kind to
+   * combine into `source`'s tier-2 upgrade. `source` itself never moves or
+   * lifts — only the target selection is pending — so this covers both
+   * triggers: a tap (from the InspectPanel's Merge button, `dragging` false)
+   * and a long-press-drag lifted straight off the board (`dragging` true,
+   * see InputController's long-press handling — the same "drag races the
+   * camera pan" constraint that kept Move tap-only applies here, so the drag
+   * variant only exists behind that disambiguation, not as the default).
+   */
+  beginMerge(source: PlacedBuilding, dragging = false): void {
+    if (!source.def.upgradesTo) return
+    this.setState({ kind: 'merging', source, dragging })
+    this.onMessage?.(
+      dragging ? `Drag onto another ${source.def.name} to merge` : `Tap another ${source.def.name} to merge`,
+      true,
+    )
+  }
+
   sell(building: PlacedBuilding): void {
     const refund = BuildingRegistry.refundFor(building.def)
     this.registry.remove(building)
@@ -141,7 +163,10 @@ export class Placement {
 
   private onPointerUp = (event: PointerEvent): void => {
     this.detachDragListeners()
-    if (this.current.kind === 'idle') return
+    // Merging never attaches these listeners in the first place (it is
+    // tap-only, like Move); the guard is here only so TypeScript can see
+    // `dragging` is safe to write below.
+    if (this.current.kind === 'idle' || this.current.kind === 'merging') return
     this.current.dragging = false
 
     const cell = this.pickWithOffset(event)
@@ -174,7 +199,9 @@ export class Placement {
   private preview(cell: Cell | null): void {
     this.hoveredCell = cell
     const state = this.current
-    if (state.kind === 'idle') return
+    // Merging is tap-only — its eligible targets are shown up front by a
+    // dedicated highlight (see MergeHighlight), not this drag-hover preview.
+    if (state.kind === 'idle' || state.kind === 'merging') return
 
     if (!cell) {
       this.ghost.hide()
@@ -182,14 +209,35 @@ export class Placement {
       return
     }
 
-    const defId = state.kind === 'placing' ? state.defId : state.building.def.id
-    const valid = this.check(cell, state) === PlacementError.Ok
-    this.ghost.show(defId, cell, valid)
-    this.marker.setColor(valid ? MARKER_VALID : MARKER_INVALID)
+    // Dragging a purchase over a matching Construct previews the *merge
+    // result*, not the card being dragged — the ghost shows what dropping
+    // here actually produces.
+    const mergeTarget = state.kind === 'placing' ? this.mergeTargetAt(state.defId, cell) : null
+    const defId = mergeTarget
+      ? mergeTarget.def.upgradesTo!
+      : state.kind === 'placing'
+        ? state.defId
+        : state.building.def.id
+    const error = this.check(cell, state)
+    const valid = error === PlacementError.Ok
+
+    this.ghost.show(defId, cell, mergeTarget ? (valid ? 'merge' : 'invalid') : valid ? 'valid' : 'invalid')
+    this.marker.setColor(mergeTarget ? MARKER_MERGE : valid ? MARKER_VALID : MARKER_INVALID)
     this.marker.show(cell)
   }
 
+  /** The Construct already on `cell` that buying `defId` would merge into, if any. */
+  private mergeTargetAt(defId: BuildingId, cell: Cell | null): PlacedBuilding | null {
+    if (!cell) return null
+    const existing = this.registry.at(cell)
+    if (!existing || existing.def.id !== defId || !existing.def.upgradesTo) return null
+    return existing
+  }
+
   private check(cell: Cell | null, state: PlacementState): PlacementError {
+    if (state.kind === 'placing' && this.mergeTargetAt(state.defId, cell)) {
+      return this.economy.canAfford(BUILDINGS[state.defId].cost) ? PlacementError.Ok : PlacementError.Unaffordable
+    }
     const cellError = this.registry.validateCell(cell)
     if (cellError !== PlacementError.Ok) return cellError
     if (state.kind === 'placing' && !this.economy.canAfford(BUILDINGS[state.defId].cost)) {
@@ -202,6 +250,15 @@ export class Placement {
     const state = this.current
     if (state.kind === 'idle') return
 
+    if (state.kind === 'merging') {
+      this.commitMerge(state.source, cell, state.dragging)
+      return
+    }
+
+    // Affordability is gated here uniformly — including for a merge target,
+    // since `check()` already accounts for one — so a tap-mode mistap on an
+    // unaffordable drop stays armed exactly like every other case, instead of
+    // the merge path quietly skipping that forgiveness.
     const error = this.check(cell, state)
     if (error !== PlacementError.Ok) {
       this.onMessage?.(placementErrorText(error), false)
@@ -212,6 +269,11 @@ export class Placement {
     }
 
     if (state.kind === 'placing') {
+      const mergeTarget = this.mergeTargetAt(state.defId, cell)
+      if (mergeTarget) {
+        this.commitPurchaseMerge(state.defId, mergeTarget, cell)
+        return
+      }
       const def = BUILDINGS[state.defId]
       if (!this.economy.spend(def.cost)) {
         this.onMessage?.(placementErrorText(PlacementError.Unaffordable), false)
@@ -228,12 +290,60 @@ export class Placement {
     this.clear()
   }
 
+  /**
+   * Buying `defId` directly onto a matching, already-placed Construct merges
+   * the two into the tier-2 upgrade instead of failing as "occupied" — the
+   * headline gesture the shop dock is built for: drag a card straight onto
+   * what you already have. Costs exactly what the fresh card would have cost
+   * standing alone; the existing Construct was already paid for when it was
+   * first raised, so merging itself adds no further toll.
+   */
+  private commitPurchaseMerge(defId: BuildingId, existing: PlacedBuilding, cell: Cell): void {
+    const def = BUILDINGS[defId]
+    const upgradeId = existing.def.upgradesTo!
+    if (!this.economy.spend(def.cost)) {
+      this.onMessage?.(placementErrorText(PlacementError.Unaffordable), false)
+      this.cancel()
+      return
+    }
+    this.registry.merge([existing], upgradeId, cell)
+    this.onMessage?.(`${BUILDINGS[upgradeId].name} raised from the merge · -${def.cost}g`, true)
+    this.onPlaced?.(defId)
+    this.clear()
+  }
+
+  /**
+   * Resolves a merge attempt. The target must be a different Construct of the
+   * same kind as the source — anything else (empty ground, a mismatched
+   * building, tapping the source again) is an invalid selection. For a tap
+   * that stays armed, so a mistap costs nothing and the player can just try
+   * again; for a drag, the finger has already lifted, so there is nothing
+   * left to "stay armed" for and it cancels instead, matching every other
+   * drag-based action in this class.
+   */
+  private commitMerge(source: PlacedBuilding, cell: Cell, dragging: boolean): void {
+    const upgradeId = source.def.upgradesTo
+    const target = this.registry.at(cell)
+
+    if (!upgradeId || !target || target.entityId === source.entityId || target.def.id !== source.def.id) {
+      this.onMessage?.('Choose a matching Construct to merge', false)
+      if (dragging) this.cancel()
+      return
+    }
+
+    this.registry.merge([source, target], upgradeId, cell)
+    this.onMessage?.(`${BUILDINGS[upgradeId].name} raised from the merge`, true)
+    this.clear()
+  }
+
   /** Abandons the pending placement, returning a lifted building to its origin. */
   cancel(): void {
     const state = this.current
     if (state.kind === 'moving') {
       this.registry.drop(state.building, state.origin)
       this.onMessage?.('Move cancelled', false)
+    } else if (state.kind === 'merging') {
+      this.onMessage?.('Merge cancelled', false)
     }
     this.detachDragListeners()
     this.clear()

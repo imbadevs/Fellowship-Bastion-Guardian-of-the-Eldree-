@@ -15,25 +15,6 @@ import { Category, DamageType, EntityFlag, MAX_ENTITIES, Team, World } from './W
 
 /** How far outside the board's edge the horde forms up. */
 const SPAWN_MARGIN = 2.2
-/**
- * World angle that renders at the top of the screen.
- *
- * The camera sits at +Z looking toward -Z (CameraRig), so -Z is what's
- * furthest from it and reads as "up" on a pitched-down view — confirmed by
- * projecting both directions through the live camera matrices rather than
- * assumed from the setup code. `angle` here is measured the same way
- * `HexLayout`/spawn code already does: `sin(angle)` on X, `cos(angle)` on Z.
- */
-const TOP_ANGLE = Math.PI
-/**
- * Total angular width of the top approach, in radians (~130°).
- *
- * Enemies never spawn outside this band — it is what makes "always from the
- * top" true at every lane count, not just the default one. Wide enough that
- * six lanes still read as distinct columns, narrow enough that even the
- * widest wave stays clear of the board's left/right/bottom edges.
- */
-const APPROACH_WIDTH = (130 * Math.PI) / 180
 /** Distance from the board centre at which an enemy can strike the Eldree. */
 const ELDREE_REACH = 0.85
 /** Speed multiplier while forcing a path across a tile with a Construct on it. */
@@ -172,8 +153,9 @@ export class Sim {
     w.damageType[id] = def.id === 'rune-ward' ? DamageType.Magic : DamageType.Physical
 
     w.rosterCap[id] = def.spawn?.roster ?? 0
-    // Stagger the first unit so a fresh Construct garrisons quickly but not instantly.
-    w.spawnTimer[id] = (def.spawn?.interval ?? 0) * 0.35
+    // The first unit waits a full interval too, same as every one after it —
+    // a freshly raised Construct is not yet garrisoned.
+    w.spawnTimer[id] = def.spawn?.interval ?? 0
 
     this.constructDefs[id] = def
     return id
@@ -185,6 +167,51 @@ export class Sim {
     this.releaseGarrison(simId)
     this.constructDefs[simId] = null
     this.world.kill(simId)
+  }
+
+  /**
+   * Tears down one or two Constructs and raises their upgrade on `cell`,
+   * carrying over as much of the combined garrison as the new roster holds
+   * instead of releasing every unit and mustering the upgrade from zero —
+   * unlike `removeConstruct`, a merge is not really losing the building, it's
+   * becoming a bigger one. Surviving units beyond the new roster cap (e.g.
+   * two full Barracks, 6 Warriors, merging into a War Lodge that only holds
+   * 5) have no slot to hold and are released.
+   */
+  mergeConstructs(sourceSimIds: readonly number[], upgradeDef: BuildingDef, cell: Cell): number {
+    const w = this.world
+    const survivors: number[] = []
+    for (let id = 0; id < w.capacity; id++) {
+      if (w.alive[id] && w.category[id] === Category.Unit && sourceSimIds.includes(w.ownerId[id]!)) {
+        survivors.push(id)
+      }
+    }
+
+    for (const simId of sourceSimIds) {
+      if (!w.isAlive(simId)) continue
+      this.constructDefs[simId] = null
+      w.kill(simId)
+    }
+
+    const newId = this.addConstruct(upgradeDef, cell)
+    if (newId < 0) {
+      // No room for the upgrade at all — the units it would have inherited
+      // have nothing left to belong to either.
+      for (const unitId of survivors) w.kill(unitId)
+      return newId
+    }
+
+    for (const unitId of survivors) {
+      const slot = w.claimSlot(newId)
+      if (slot < 0) {
+        w.kill(unitId)
+        continue
+      }
+      w.ownerId[unitId] = newId
+      w.slot[unitId] = slot
+      this.writeStation(unitId, newId, slot)
+    }
+    return newId
   }
 
   moveConstruct(simId: number, cell: Cell): void {
@@ -307,14 +334,12 @@ export class Sim {
     const id = this.world.spawn()
     if (id < 0) return
 
-    // Lanes are visited round-robin so a wave arrives evenly across the top
-    // approach, then jittered so the horde does not form single-file columns.
-    // A single lane sits dead centre; more lanes spread evenly outward from
-    // there, always inside APPROACH_WIDTH, so the horde never wraps around
-    // to the board's sides or back.
+    // Lanes are visited round-robin so a wave arrives evenly on every front,
+    // spread across the full circle, then jittered so the horde does not
+    // form a single-file column. The Eldree sits at the board's centre with
+    // no inherent "front" — the horde attacking from all sides is the point.
     const lane = this.laneCursor++ % this.lanes
-    const t = this.lanes <= 1 ? 0.5 : lane / (this.lanes - 1)
-    const angle = TOP_ANGLE - APPROACH_WIDTH / 2 + t * APPROACH_WIDTH + this.rng.range(-0.1, 0.1)
+    const angle = (lane / this.lanes) * Math.PI * 2 + this.rng.range(-0.28, 0.28)
     const distance = this.grid.visibleWorldRadius + SPAWN_MARGIN + this.rng.range(0, 1.4)
 
     const w = this.world

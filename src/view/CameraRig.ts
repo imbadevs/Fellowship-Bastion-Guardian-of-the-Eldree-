@@ -8,8 +8,13 @@ import * as THREE from 'three'
  * and a steeper tilt spends it, projecting the board taller without pushing the
  * camera back. Going fully top-down would recover the rest but flatten the
  * buildings and units, which need visible silhouettes.
+ *
+ * Exported because it never changes at runtime (the camera never rotates) and
+ * any world-space UI meant to face the camera head-on — a cooldown bar, say —
+ * needs this exact angle to tilt correctly. Redefining it locally would risk
+ * silent drift if PITCH is ever retuned.
  */
-const PITCH = THREE.MathUtils.degToRad(62)
+export const PITCH = THREE.MathUtils.degToRad(62)
 
 const ZOOM_IN_LIMIT = 0.42
 const ZOOM_OUT_LIMIT = 1.12
@@ -19,10 +24,26 @@ const PAN_LIMIT = 0.5
 const FIT_PADDING = 1.06
 
 /**
- * Nudges the framed board up-screen, as a fraction of board radius, to leave
- * room for the build tray and shop cards that occupy the bottom band from M2 on.
+ * Extra world-radius folded into the fit distance, beyond the board's own
+ * edge, so nearby spawns read as on-screen rather than only becoming visible
+ * once they have closed some distance. Loosely matches the sim's own spawn
+ * margin (`SPAWN_MARGIN` + jitter in Sim.ts) — the two are independent by
+ * design (view shouldn't import sim internals just for this), but tuned to
+ * the same ballpark on purpose.
+ *
+ * The horde now attacks from every direction at once (see Sim.ts), so no
+ * framing can keep the *entire* spawn ring on screen simultaneously the way
+ * a single-approach design could — this only buys margin, not full coverage.
  */
-const FRAME_BIAS = 0.42
+const APPROACH_VISIBILITY = 2.4
+
+/**
+ * Nudges the framed board up-screen, as a fraction of board radius, to leave
+ * room for the bottom-docked shop. Modest, and roughly symmetric top-to-
+ * bottom on purpose — with the horde attacking from every direction, the
+ * board itself has no "front" the framing should favour.
+ */
+const FRAME_BIAS = 0.16
 
 /**
  * Orbit-free camera rig for a portrait board view.
@@ -63,10 +84,15 @@ export class CameraRig {
     const vFov = THREE.MathUtils.degToRad(this.camera.fov)
     const hFov = 2 * Math.atan(Math.tan(vFov / 2) * this.camera.aspect)
 
+    // Fit against the board plus its approach margin, not the board alone —
+    // `this.boardRadius` itself stays the true radius (fog and pan-limit
+    // still key off that), this only widens the shot.
+    const visibleRadius = boardRadius + APPROACH_VISIBILITY
+
     // Horizontal is the binding constraint in portrait; vertical extent is
     // foreshortened by the tilt, hence the sin(PITCH) term.
-    const distH = boardRadius / Math.tan(hFov / 2)
-    const distV = (boardRadius * Math.sin(PITCH)) / Math.tan(vFov / 2)
+    const distH = visibleRadius / Math.tan(hFov / 2)
+    const distV = (visibleRadius * Math.sin(PITCH)) / Math.tan(vFov / 2)
 
     const previousZoom = this.fitDistance > 0 ? this.targetDistance / this.fitDistance : 1
     this.fitDistance = Math.max(distH, distV) * FIT_PADDING
