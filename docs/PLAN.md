@@ -1013,3 +1013,93 @@ Verified: enemies confirmed spawning from multiple directions in the same
 wave (top and bottom both visible in a single screenshot, 6-lane wave); the
 board reads centred rather than pinned to one edge at both close and
 board-wide zoom; typecheck, build, and dev-handle stripping all clean.
+
+---
+
+## Appendix R — the button-triggered merge is gone; drag-only now
+
+Reported directly: the InspectPanel's tap-select-then-tap-Merge-button flow
+still felt clunky, and the ask was explicit — drag and drop, not a button.
+
+**Removed, not replaced.** The button offered exactly one thing: the free
+"combine two Constructs you already own" action. The board-to-board
+long-press-drag (Appendix P) already *is* that same action, just triggered
+by dragging instead of tapping a button — so removing `InspectPanel`'s
+Merge button loses no capability, it only removes the worse of two paths to
+an identical outcome. `Placement.beginMerge()`/`commitMerge()` are untouched
+internally; only the trigger (the button, and the `inspect.onMerge` wiring
+in `main.ts`) is gone. The `dragging` flag on `beginMerge()` stays even
+though every remaining caller passes `true` — it is a real, load-bearing
+distinction (stay-armed-on-invalid-drop for a tap vs. cancel-outright for a
+drag, since a drag's finger has already lifted), not vestigial flexibility,
+and cheap enough to keep for whatever the next merge trigger turns out to be.
+
+Also swept up: the `.inspect-actions .merge` CSS rule and the `--merge` CSS
+custom property it was the only consumer of, both dead once the button's
+markup was gone.
+
+Merging is now exactly two drag gestures — drop a shop purchase onto a
+match, or long-press-drag one owned Construct onto another — and nothing
+else. Verified both still work end to end after the button's removal: the
+InspectPanel's action row is back to Move/Sell/Close (no third button); a
+board-to-board drag merge still produces the upgrade for free; a shop-card
+drag onto an existing Construct still merges for the card's price.
+
+## Appendix S — Move and Sell unified into the same drag; InspectPanel goes read-only
+
+Reported directly: tapping a board Construct still surfaced a Move/Sell
+button menu, and the ask was to make those drag-and-drop too, selling by
+dropping on a new recycle icon. With the merge button already gone
+(Appendix R), this was the last button-driven action left on the board.
+
+**One state, three outcomes.** `Placement`'s `'merging'` state is deleted
+outright — `beginMerge()`/`commitMerge()` are gone, and `beginMove()` is now
+the single entry point for Move, Merge *and* Sell alike, disambiguated
+purely by where the lifted Construct lands: an empty tile moves it, a
+matching Construct merges into it (`commitMoveMerge()`, the free
+board-to-board counterpart to the shop's `commitPurchaseMerge()`), and a new
+recycle-zone drop zone sells it (`sellDragged()`). This is a genuine
+simplification, not just a rename — `'merging'` had exactly one trigger
+(the board long-press-drag from Appendix P), and once Move's own commit path
+learned to check `mergeTargetAt()` first, that trigger's whole reason to be
+its own state disappeared. `check()` and `preview()` gained the matching
+`'moving'`-branch merge lookups, so the ghost/marker preview shows the
+tier-2 result (violet) while dragging over a match, exactly like a shop-card
+drag already did.
+
+**InputController's gate widened.** `onBuildingDragCandidate` used to allow
+picking up only a mergeable Construct (had `upgradesTo`, and a second of its
+kind existed); now it is `!!registry.at(cell)` — any placed Construct,
+combat-phase-gated as before. `onBuildingDragMove`/`onBuildingDragEnd` grew
+new parameters: the move callback now also passes the touch-offset-adjusted
+board cell under the finger (so `Placement.previewAt()` can drive the live
+ghost during a board drag the way `trackPointer()` already did for a
+shop-card drag — the long-press path never ran through `trackPointer`, so
+without this the merge/move preview would only have shown up front via
+`MergeHighlight`, never following the current hover), and the end callback
+now also passes the *raw*, non-offset release point for hit-testing DOM drop
+zones — the recycle icon is a real element the finger is aimed at, not a
+board tile that wants the "clear the fingertip" adjustment.
+
+**RecycleZone** (`src/ui/RecycleZone.ts`) is a new DOM overlay, shown only
+while a board Construct is mid-drag. It covers the shop dock's own screen
+area rather than floating as a small separate icon — nothing in the dock is
+reachable mid-drag anyway, so replacing it reads clearer than competing for
+space next to it. Hit-testing is a plain `getBoundingClientRect()` check
+(`contains(x, y)`), not the 3D `pick()` used for board tiles, since this
+lives in screen space. It also toggles an `armed` state as the drag hovers
+it, for feedback before release.
+
+**InspectPanel lost its action row entirely** — no Move, Sell, or even
+Close button now, just name + blurb (+ live HP mid-combat). A tap always
+shows this read-only card; picking the Construct up for Move/Merge/Sell is
+long-press-drag only, matching how merge-only used to work before this
+change extended it to every Construct. Dismissal is tap-elsewhere, same as
+before Close existed.
+
+Verified end to end in the browser via synthetic pointer events (long-press
+threshold, then move, then release): dragging one Barracks onto another
+still merges for free with the garrison carried across; dragging a Construct
+onto an empty tile still moves it for free; dragging a Construct onto the
+recycle zone sells it for the standard 60% refund and the zone visibly arms
+on hover; a plain tap still shows the read-only info card with no buttons.

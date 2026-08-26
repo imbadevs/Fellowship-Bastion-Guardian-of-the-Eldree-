@@ -47,7 +47,8 @@ phone framing rather than a wide view that hides the portrait constraint.
   paths share one commit routine
 - Ghost preview with valid/invalid tint, per-tile validity rules, gold checked
   at both arm and commit time
-- Tap a placed Construct to inspect, move (free) or sell (60% refund)
+- Tap a placed Construct to inspect it; long-press-drag it to move, merge, or
+  sell it (60% refund) — see Merging below
 - Constructs orient outward from the Eldree, so walls face the horde
 - Footprints are measured and fitted to 94% of the tile's inscribed circle, with
   damped height scaling so spires read tall without hiding the board
@@ -136,8 +137,9 @@ game.sim.waveProgress
   across evenly-spaced directions around the full circle, the main pressure
   dial: the same enemy count surrounding the board from six sides is a very
   different problem than the same count funnelling in from one
-- The board is combat-only during a wave: tapping a Construct mid-fight shows
-  a read-only status readout (name, blurb, live HP) instead of Move/Sell
+- The board is combat-only during a wave: long-press-dragging a Construct to
+  move/merge/sell it is disabled, so a tap mid-fight is just the read-only
+  status readout (name, blurb, live HP) it always is
 - A fresh run (via defeat → "Begin again") resets gold as well as the board —
   a defeated run's leftover economy no longer carries into the next attempt
 - The old "buy anything, anytime" tray is gone; the dev bar is now genuinely
@@ -146,37 +148,34 @@ game.sim.waveProgress
 The run loop is real and playable end to end: shop → place → ready → fight →
 reward → shop, indefinitely, with no scripted wave cap.
 
-**Merging** — three ways in, for different situations. The four spawner
-families have a tier-2 upgrade (Barracks/War Lodge, Archery Range/Bowspire,
-Knight's Hall/Bastion Keep, Mage Spire/Arcane Obelisk); defensive structures
-have no tier-2 yet, so they're never mergeable.
+**Move, Merge and Sell are one drag gesture.** Tapping a Construct only ever
+shows a read-only info card (name, blurb, live HP mid-combat) — no buttons.
+To act on it, press and hold; after a beat (~380ms) it picks up, and where
+you drop it decides the outcome:
 
-- *Buy straight into an upgrade* — drag a shop card and drop it directly onto
-  a matching Construct already on the board (or tap the card, then tap that
-  Construct). The ghost preview turns violet and shows the tier-2 shape
-  instead of red "occupied", since dropping there is a valid, different
-  action. Costs exactly what the card costs standing alone — the existing
-  Construct was already paid for when it went up, so the merge itself adds no
-  further toll.
-- *Drag one built Construct onto another, for free* — press and hold a
-  mergeable Construct on the board; after a beat (~380ms) it picks up, every
-  eligible partner on the board lights up violet, and dropping it on one
-  merges them. A quick drag starting on the same tile still pans the camera
-  as normal — only a press that stays still past the hold delay counts as a
-  pickup, which is what makes the two gestures coexist on the same tile
-  without one stealing the other. No gold changes hands.
-- *Combine two you already own, via a menu* — tap a built Construct; if a
-  match exists elsewhere and it has an upgrade, the InspectPanel offers
-  "Merge" alongside Move/Sell, highlighting every eligible partner the same
-  way. Also free — this and the drag above are the same underlying action,
-  just two different ways to start it.
+- **Drop on an empty tile** — moves it there, free.
+- **Drop on a matching Construct** — merges the two into the tier-2 upgrade,
+  free (the existing Construct was already paid for). Every eligible partner
+  on the board lights up violet the moment the drag starts, and the ghost
+  preview turns violet over the specific tile you're hovering. The four
+  spawner families have a tier-2 upgrade (Barracks/War Lodge, Archery
+  Range/Bowspire, Knight's Hall/Bastion Keep, Mage Spire/Arcane Obelisk);
+  defensive structures have no tier-2 yet, so they're never mergeable. A
+  merge carries the combined garrison into the upgrade rather than mustering
+  from zero; survivors beyond the new roster cap (two full Barracks is 6
+  Warriors, a War Lodge only holds 5) have no slot to keep and are released.
+- **Drop on the recycle icon** — sells it for the standard refund. The icon
+  appears over the shop dock only while a Construct is being dragged, and
+  lights up as you hover it.
 
-Both are hidden during combat, like Move and Sell. And both carry the
-combined garrison into the upgrade — a merge is raising a bigger Construct,
-not losing one, so it does not muster from zero. Survivors beyond the new
-roster cap (two full Barracks is 6 Warriors; a War Lodge only holds 5) have
-no slot to keep and are released; anything that fits transfers and keeps
-fighting through the transition.
+A quick drag starting on the same tile still pans the camera as normal —
+only a press that stays still past the hold delay counts as a pickup, which
+is what lets picking-up and panning coexist on the same tile without one
+stealing the other. Buying straight into an upgrade still works too: drag a
+shop card and drop it directly onto a matching Construct (or tap the card,
+then tap that Construct) — same violet preview, costs exactly what the card
+costs standing alone. All of this is hidden during combat — the board is
+look-but-not-touch while a wave runs.
 
 **Cooldown bars** — every Construct with a timer (spawn interval for
 spawners, attack cooldown for turrets) shows a small charge-up bar floating

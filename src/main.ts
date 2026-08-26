@@ -12,7 +12,7 @@ import { CooldownBarView, type CooldownEntry } from './view/CooldownBarView'
 import { buildingHeight } from './view/BuildingShapes'
 import { GhostView } from './view/GhostView'
 import { Economy } from './game/Economy'
-import { BuildingRegistry, type PlacedBuilding } from './game/Buildings'
+import { BuildingRegistry } from './game/Buildings'
 import { Placement } from './game/Placement'
 import { Shop } from './game/Shop'
 import { Sim, SimPhase } from './sim/Sim'
@@ -32,6 +32,7 @@ import { DebugOverlay } from './ui/DebugOverlay'
 import { Hud } from './ui/Hud'
 import { Toast } from './ui/Toast'
 import { InspectPanel } from './ui/InspectPanel'
+import { RecycleZone } from './ui/RecycleZone'
 
 const RUN_SEED = 20260818
 
@@ -144,6 +145,7 @@ const toast = new Toast(bottomRegion)
 const inspect = new InspectPanel(bottomRegion)
 
 const shopDock = new ShopDock(bottomRegion)
+const recycleZone = new RecycleZone(bottomRegion)
 
 const readyBtn = document.createElement('button')
 readyBtn.className = 'ready'
@@ -185,12 +187,17 @@ placement.onChange = (state) => {
   dragChip.sync(state)
   shopDock.setArmed(state.kind === 'placing' ? state.defId : null)
 
-  if (state.kind === 'merging') {
-    // Merging is tap-only, so there is no hover-driven preview to lean on —
-    // every eligible partner needs to light up the moment merge mode arms.
+  const draggingBuilding = state.kind === 'moving' && state.dragging
+  recycleZone.setVisible(draggingBuilding)
+  if (!draggingBuilding) recycleZone.setArmed(false)
+
+  if (draggingBuilding && state.building.def.upgradesTo) {
+    // Dropping the lifted Construct onto a match merges it — every eligible
+    // partner lights up the moment the drag starts, since a mid-drag hover
+    // preview alone (see `previewAt`) only shows the *currently hovered* tile.
     const matches = registry
-      .ofType(state.source.def.id)
-      .filter((b) => b.entityId !== state.source.entityId)
+      .ofType(state.building.def.id)
+      .filter((b) => b.entityId !== state.building.entityId)
       .map((b) => b.cell)
     mergeHighlight.showAll(matches)
   } else {
@@ -305,31 +312,11 @@ function restartRun(): void {
 
 gameOver.onRestart = restartRun
 
-inspect.onMove = (building) => {
-  selectMarker.hide()
-  placement.beginMove(building)
-}
-inspect.onMerge = (building) => {
-  selectMarker.hide()
-  placement.beginMerge(building)
-}
-inspect.onSell = (building) => {
-  selectMarker.hide()
-  placement.sell(building)
-}
-inspect.onClose = () => selectMarker.hide()
-
 // --- board interaction ------------------------------------------------------
 
 function describeCell(cell: Cell): string {
   if (cell.state === CellState.Eldree) return 'The Eldree · protect it'
   return `Ring ${cell.ring} · open ground`
-}
-
-/** True once a second Construct of the same kind exists somewhere else to merge with. */
-function canMerge(building: PlacedBuilding): boolean {
-  if (!building.def.upgradesTo) return false
-  return registry.ofType(building.def.id).length > 1
 }
 
 input.onSelect = (cell) => {
@@ -347,14 +334,12 @@ input.onSelect = (cell) => {
   selectMarker.show(cell)
 
   if (building) {
-    // The board is combat-only while a wave is running: inspection drops to a
-    // read-only status readout instead of offering Move/Merge/Sell.
+    // A tap always shows the read-only info card; Move/Merge/Sell are all
+    // reached by long-press-dragging the Construct itself, not from here.
     const running = sim.phase === SimPhase.Running
     inspect.show(
       building,
-      running
-        ? { hp: sim.world.hp[building.simId], maxHp: sim.world.maxHp[building.simId], readOnly: true }
-        : { canMerge: canMerge(building) },
+      running ? { hp: sim.world.hp[building.simId], maxHp: sim.world.maxHp[building.simId] } : {},
     )
   } else {
     inspect.hide()
@@ -368,25 +353,33 @@ input.onHover = (cell) => {
   else hoverMarker.hide()
 }
 
-// Long-press a mergeable Construct straight on the board to pick it up, drag
-// it onto a match, and merge — the board-to-board counterpart to dragging a
-// shop card onto an existing Construct. Combat-only board rule applies here
-// too: no picking anything up mid-wave.
+// Long-press any placed Construct to pick it up: drop it on an empty tile to
+// move it, on a matching Construct to merge, or on the recycle icon to sell
+// it — one drag, three outcomes, disambiguated by Placement/main.ts purely
+// from where it lands. Combat-only board rule applies here too: no picking
+// anything up mid-wave.
 input.onBuildingDragCandidate = (cell) => {
   if (sim.phase === SimPhase.Running) return false
-  const building = registry.at(cell)
-  return !!building && canMerge(building)
+  return !!registry.at(cell)
 }
 input.onBuildingDragStart = (cell) => {
   const building = registry.at(cell)
   if (!building) return
   selectMarker.hide()
   inspect.hide()
-  placement.beginMerge(building, true)
+  placement.beginMove(building, true)
 }
-input.onBuildingDragMove = (x, y) => dragChip.move(x, y)
-input.onBuildingDragEnd = (cell) => {
-  if (placement.state.kind !== 'merging') return
+input.onBuildingDragMove = (x, y, cell) => {
+  dragChip.move(x, y)
+  placement.previewAt(cell)
+  recycleZone.setArmed(recycleZone.contains(x, y))
+}
+input.onBuildingDragEnd = (cell, x, y) => {
+  if (placement.state.kind !== 'moving') return
+  if (recycleZone.contains(x, y)) {
+    placement.sellDragged()
+    return
+  }
   placement.tapAt(cell)
 }
 
@@ -443,8 +436,8 @@ function syncReadyButton(): void {
     ? `Begin Wave ${wave}`
     : sim.phase === SimPhase.Running
       ? 'The wave rages on'
-      : placement.state.kind === 'merging'
-        ? 'Choose a merge partner'
+      : placement.state.kind === 'moving'
+        ? 'Move, merge, or sell it'
         : 'Place your Construct'
   if (label === readyLabel) return
   readyLabel = label

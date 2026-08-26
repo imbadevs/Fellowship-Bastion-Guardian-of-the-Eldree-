@@ -9,6 +9,8 @@ const TAP_SLOP = 10
 const TAP_MAX_MS = 400
 /** How long a stationary press on an eligible Construct takes to pick it up. */
 const LONG_PRESS_MS = 380
+/** Matches Placement's TOUCH_PICK_OFFSET — the finger covers the tile otherwise. */
+const TOUCH_PICK_OFFSET = 64
 
 interface PointerState {
   x: number
@@ -30,7 +32,7 @@ interface PointerState {
  * tile. Pointer events cover mouse, touch and pen in one path; `touch-action:
  * none` on the canvas stops the browser stealing the gesture for page scroll.
  *
- * A long-press on a mergeable Construct is a fourth gesture, layered on
+ * A long-press on a placed Construct is a fourth gesture, layered on
  * carefully: starting a drag straight from the board would otherwise be
  * indistinguishable from panning, which is exactly why Move stayed tap-only
  * for so long. The disambiguation is a hold delay — a quick drag from
@@ -45,9 +47,15 @@ export class InputController {
   /** Should a long-press on this cell arm a building drag at all? */
   onBuildingDragCandidate: ((cell: Cell) => boolean) | null = null
   onBuildingDragStart: ((cell: Cell) => void) | null = null
-  onBuildingDragMove: ((clientX: number, clientY: number) => void) | null = null
-  /** `cell` is the drop target, or null if released off the board. */
-  onBuildingDragEnd: ((cell: Cell | null) => void) | null = null
+  /** `cell` is the touch-offset-adjusted board target under the finger right now, if any. */
+  onBuildingDragMove: ((clientX: number, clientY: number, cell: Cell | null) => void) | null = null
+  /**
+   * `cell` is the touch-offset-adjusted drop target, or null if released off
+   * the board. `clientX`/`clientY` are the raw, unadjusted release point —
+   * for hit-testing DOM drop zones (like the recycle icon), which the finger
+   * is actually aimed at, not the offset board target.
+   */
+  onBuildingDragEnd: ((cell: Cell | null, clientX: number, clientY: number) => void) | null = null
 
   private readonly pointers = new Map<number, PointerState>()
   private readonly hits: THREE.Intersection[] = []
@@ -150,7 +158,8 @@ export class InputController {
     if (totalMove > TAP_SLOP) state.moved = true
 
     if (state.buildingDrag) {
-      this.onBuildingDragMove?.(e.clientX, e.clientY)
+      const offset = e.pointerType === 'touch' ? TOUCH_PICK_OFFSET : 0
+      this.onBuildingDragMove?.(e.clientX, e.clientY, this.pick(e.clientX, e.clientY - offset))
       return
     }
 
@@ -187,7 +196,8 @@ export class InputController {
     this.cancelHold(state)
 
     if (state.buildingDrag) {
-      this.onBuildingDragEnd?.(this.pick(e.clientX, e.clientY))
+      const offset = e.pointerType === 'touch' ? TOUCH_PICK_OFFSET : 0
+      this.onBuildingDragEnd?.(this.pick(e.clientX, e.clientY - offset), e.clientX, e.clientY)
       return
     }
 
