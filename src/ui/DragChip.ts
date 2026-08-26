@@ -20,8 +20,9 @@ export class DragChip {
   }
 
   sync(state: PlacementState): void {
-    const dragging = state.kind === 'placing' && state.dragging
+    const dragging = (state.kind === 'placing' || state.kind === 'moving') && state.dragging
     this.el.classList.toggle('visible', dragging)
     if (state.kind === 'placing') this.el.textContent = BUILDINGS[state.defId].glyph
+    else if (state.kind === 'moving') this.el.textContent = state.building.def.glyph
   }
 }

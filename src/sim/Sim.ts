@@ -81,8 +81,8 @@ export class Sim {
   private rng: Rng
   private pending: PendingGroup[] = []
   private elapsed = 0
-  private arcs = 1
-  private arcCursor = 0
+  private lanes = 1
+  private laneCursor = 0
   private spawnedTotal = 0
   private waveTotalCount = 0
   private killedTotal = 0
@@ -153,8 +153,9 @@ export class Sim {
     w.damageType[id] = def.id === 'rune-ward' ? DamageType.Magic : DamageType.Physical
 
     w.rosterCap[id] = def.spawn?.roster ?? 0
-    // Stagger the first unit so a fresh Construct garrisons quickly but not instantly.
-    w.spawnTimer[id] = (def.spawn?.interval ?? 0) * 0.35
+    // The first unit waits a full interval too, same as every one after it —
+    // a freshly raised Construct is not yet garrisoned.
+    w.spawnTimer[id] = def.spawn?.interval ?? 0
 
     this.constructDefs[id] = def
     return id
@@ -166,6 +167,51 @@ export class Sim {
     this.releaseGarrison(simId)
     this.constructDefs[simId] = null
     this.world.kill(simId)
+  }
+
+  /**
+   * Tears down one or two Constructs and raises their upgrade on `cell`,
+   * carrying over as much of the combined garrison as the new roster holds
+   * instead of releasing every unit and mustering the upgrade from zero —
+   * unlike `removeConstruct`, a merge is not really losing the building, it's
+   * becoming a bigger one. Surviving units beyond the new roster cap (e.g.
+   * two full Barracks, 6 Warriors, merging into a War Lodge that only holds
+   * 5) have no slot to hold and are released.
+   */
+  mergeConstructs(sourceSimIds: readonly number[], upgradeDef: BuildingDef, cell: Cell): number {
+    const w = this.world
+    const survivors: number[] = []
+    for (let id = 0; id < w.capacity; id++) {
+      if (w.alive[id] && w.category[id] === Category.Unit && sourceSimIds.includes(w.ownerId[id]!)) {
+        survivors.push(id)
+      }
+    }
+
+    for (const simId of sourceSimIds) {
+      if (!w.isAlive(simId)) continue
+      this.constructDefs[simId] = null
+      w.kill(simId)
+    }
+
+    const newId = this.addConstruct(upgradeDef, cell)
+    if (newId < 0) {
+      // No room for the upgrade at all — the units it would have inherited
+      // have nothing left to belong to either.
+      for (const unitId of survivors) w.kill(unitId)
+      return newId
+    }
+
+    for (const unitId of survivors) {
+      const slot = w.claimSlot(newId)
+      if (slot < 0) {
+        w.kill(unitId)
+        continue
+      }
+      w.ownerId[unitId] = newId
+      w.slot[unitId] = slot
+      this.writeStation(unitId, newId, slot)
+    }
+    return newId
   }
 
   moveConstruct(simId: number, cell: Cell): void {
@@ -203,8 +249,8 @@ export class Sim {
   startWave(wave: number): void {
     const def = waveDef(wave)
     this.wave = wave
-    this.arcs = def.arcs
-    this.arcCursor = 0
+    this.lanes = def.lanes
+    this.laneCursor = 0
     this.elapsed = 0
     this.spawnedTotal = 0
     this.killedTotal = 0
@@ -288,10 +334,12 @@ export class Sim {
     const id = this.world.spawn()
     if (id < 0) return
 
-    // Arcs are visited round-robin so a wave arrives evenly on every front,
-    // then jittered so the horde does not form a single-file column.
-    const arc = this.arcCursor++ % this.arcs
-    const angle = (arc / this.arcs) * Math.PI * 2 + this.rng.range(-0.28, 0.28)
+    // Lanes are visited round-robin so a wave arrives evenly on every front,
+    // spread across the full circle, then jittered so the horde does not
+    // form a single-file column. The Eldree sits at the board's centre with
+    // no inherent "front" — the horde attacking from all sides is the point.
+    const lane = this.laneCursor++ % this.lanes
+    const angle = (lane / this.lanes) * Math.PI * 2 + this.rng.range(-0.28, 0.28)
     const distance = this.grid.visibleWorldRadius + SPAWN_MARGIN + this.rng.range(0, 1.4)
 
     const w = this.world

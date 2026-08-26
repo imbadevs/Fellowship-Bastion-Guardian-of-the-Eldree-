@@ -180,3 +180,23 @@ export function buildingGeometry(id: BuildingId): THREE.BufferGeometry {
   }
   return geo
 }
+
+const heightCache = new Map<BuildingId, number>()
+
+/**
+ * Peak height of a building's fitted geometry above the tile surface.
+ *
+ * Measured off the actual geometry rather than hand-authored, so anything
+ * that needs to sit above a Construct — a cooldown bar, say — can never drift
+ * out of sync with a shape that gets tuned later.
+ */
+export function buildingHeight(id: BuildingId): number {
+  let height = heightCache.get(id)
+  if (height === undefined) {
+    const geo = buildingGeometry(id)
+    geo.computeBoundingBox()
+    height = geo.boundingBox?.max.y ?? 0
+    heightCache.set(id, height)
+  }
+  return height
+}

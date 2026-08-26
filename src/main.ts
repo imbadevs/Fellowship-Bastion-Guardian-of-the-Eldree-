@@ -8,6 +8,8 @@ import { TileMarker } from './view/TileMarker'
 import { Eldree } from './view/Eldree'
 import { InputController } from './view/InputController'
 import { BuildingView } from './view/BuildingView'
+import { CooldownBarView, type CooldownEntry } from './view/CooldownBarView'
+import { buildingHeight } from './view/BuildingShapes'
 import { GhostView } from './view/GhostView'
 import { Economy } from './game/Economy'
 import { BuildingRegistry } from './game/Buildings'
@@ -22,13 +24,15 @@ import { unitGeometry } from './view/UnitShapes'
 import { ActorView } from './view/ActorView'
 import { ProjectileView } from './view/ProjectileView'
 import { Category } from './sim/World'
+import { MergeHighlight } from './view/MergeHighlight'
 import { GameOverPanel } from './ui/GameOverPanel'
-import { ShopPanel } from './ui/ShopPanel'
+import { ShopDock } from './ui/ShopDock'
 import { DragChip } from './ui/DragChip'
 import { DebugOverlay } from './ui/DebugOverlay'
 import { Hud } from './ui/Hud'
 import { Toast } from './ui/Toast'
 import { InspectPanel } from './ui/InspectPanel'
+import { RecycleZone } from './ui/RecycleZone'
 
 const RUN_SEED = 20260818
 
@@ -58,6 +62,8 @@ renderer.scene.add(hoverMarker.mesh, selectMarker.mesh, placeMarker.mesh)
 const ghost = new GhostView()
 renderer.scene.add(ghost.mesh)
 
+const mergeHighlight = new MergeHighlight(renderer.scene, grid.size)
+
 rig.fitBoard(grid.visibleWorldRadius)
 rig.reset()
 
@@ -66,6 +72,7 @@ rig.reset()
 const economy = new Economy(400)
 const registry = new BuildingRegistry(grid)
 const buildingView = new BuildingView(renderer.scene, registry)
+const cooldownBars = new CooldownBarView(renderer.scene, 61)
 
 const sim = new Sim(grid, RUN_SEED)
 const enemyView = new ActorView(renderer.scene, grid, {
@@ -95,6 +102,16 @@ registry.onRemoved = (building) => {
 }
 registry.onMoved = (building) => {
   sim.moveConstruct(building.simId, building.cell)
+}
+// A merge is one transition, not a removal followed by a placement — routed
+// separately so the sim can carry the combined garrison into the upgrade
+// instead of releasing it and mustering the new Construct from zero.
+registry.onMerged = (sources, result) => {
+  result.simId = sim.mergeConstructs(
+    sources.map((s) => s.simId),
+    result.def,
+    result.cell,
+  )
 }
 
 // The sim can destroy a Construct (hp reaches 0) independently of the player
@@ -127,6 +144,9 @@ const debug = new DebugOverlay(topRegion)
 const toast = new Toast(bottomRegion)
 const inspect = new InspectPanel(bottomRegion)
 
+const shopDock = new ShopDock(bottomRegion)
+const recycleZone = new RecycleZone(bottomRegion)
+
 const readyBtn = document.createElement('button')
 readyBtn.className = 'ready'
 readyBtn.addEventListener('click', startWave)
@@ -137,7 +157,6 @@ devBar.className = 'dev-bar'
 bottomRegion.append(devBar)
 
 const gameOver = new GameOverPanel(uiRoot)
-const shopPanel = new ShopPanel(uiRoot)
 const dragChip = new DragChip()
 
 hud.setWave(wave)
@@ -149,47 +168,77 @@ economy.onChange = (gold) => {
   hud.setGold(gold)
   // A placement in flight may have just become unaffordable.
   placement.revalidate()
-  if (shop.isOpen) shopPanel.syncGold(gold)
+  shopDock.syncGold(gold)
 }
+
+// A purchase arms Placement the same way a tray card once did. The slot is
+// only marked "Built" once Placement confirms it actually landed on a tile —
+// a mistap or a cancelled drag must leave the slot buyable, not falsely
+// marked sold.
+let pendingShopIndex = -1
 
 placement.onMessage = (text, ok) => toast.show(text, ok)
 placement.onDragMove = (x, y) => dragChip.move(x, y)
+placement.onPlaced = () => {
+  if (pendingShopIndex >= 0) shop.markBought(pendingShopIndex)
+  pendingShopIndex = -1
+}
 placement.onChange = (state) => {
   dragChip.sync(state)
+  shopDock.setArmed(state.kind === 'placing' ? state.defId : null)
+
+  const draggingBuilding = state.kind === 'moving' && state.dragging
+  recycleZone.setVisible(draggingBuilding)
+  if (!draggingBuilding) recycleZone.setArmed(false)
+
+  if (draggingBuilding && state.building.def.upgradesTo) {
+    // Dropping the lifted Construct onto a match merges it — every eligible
+    // partner lights up the moment the drag starts, since a mid-drag hover
+    // preview alone (see `previewAt`) only shows the *currently hovered* tile.
+    const matches = registry
+      .ofType(state.building.def.id)
+      .filter((b) => b.entityId !== state.building.entityId)
+      .map((b) => b.cell)
+    mergeHighlight.showAll(matches)
+  } else {
+    mergeHighlight.hideAll()
+  }
+
   if (state.kind !== 'idle') {
     selectMarker.hide()
     hoverMarker.hide()
     inspect.hide()
+    return
   }
+  pendingShopIndex = -1
+  shop.refresh()
 }
 
-// --- shop ---------------------------------------------------------------
+// --- shop -----------------------------------------------------------------
+// Docked at the bottom for the whole Prep period, not a modal — the board
+// stays visible the entire time. Visibility is owned by the same handful of
+// call sites that already drive the run's phase, not polled every frame.
 
-shop.onOfferChanged = (offer, rerollCost) => shopPanel.show(wave, offer, rerollCost, economy.gold)
+shop.onOfferChanged = (offer, bought, rerollCost) => shopDock.show(offer, bought, rerollCost, economy.gold)
 shop.onMessage = (text, ok) => toast.show(text, ok)
 
-shopPanel.onBuyTap = (index) => {
+shopDock.onBuyTap = (index) => {
   const id = shop.currentOffer[index]
   if (id === undefined) return
-  shop.choose()
-  shopPanel.hide()
+  pendingShopIndex = index
   placement.beginPurchaseHold(id)
 }
-shopPanel.onBuyDrag = (index, event) => {
+shopDock.onBuyDrag = (index, event) => {
   const id = shop.currentOffer[index]
   if (id === undefined) return
-  shop.choose()
-  shopPanel.hide()
+  pendingShopIndex = index
   placement.beginPurchaseDrag(id, event)
 }
-shopPanel.onReroll = () => shop.reroll()
-shopPanel.onSkip = () => {
-  shop.skip()
-  shopPanel.hide()
-}
+shopDock.onReroll = () => shop.reroll()
 
 function openShop(): void {
   shop.open(wave)
+  shopDock.setVisible(true)
 }
 
 // --- run flow -----------------------------------------------------------
@@ -218,6 +267,7 @@ sim.events.onWaveCleared = (cleared) => {
 
 sim.events.onDefeat = () => {
   hud.setProgress(null)
+  shopDock.setVisible(false)
   gameOver.show(sim.wave)
 }
 
@@ -229,15 +279,16 @@ function advanceWave(): void {
   if (changed.length > 0) expandBoard()
 }
 
-/** True once the shop is resolved, nothing is being placed, and combat isn't running. */
+/** True once nothing is being placed and combat isn't running. */
 function canStartWave(): boolean {
-  return sim.phase !== SimPhase.Running && !shop.isOpen && !placement.isActive
+  return sim.phase !== SimPhase.Running && !placement.isActive
 }
 
 function startWave(): void {
   if (!canStartWave()) return
   inspect.hide()
   selectMarker.hide()
+  shopDock.setVisible(false)
   sim.startWave(wave)
   toast.show(`Wave ${wave} approaches`, false)
 }
@@ -261,16 +312,6 @@ function restartRun(): void {
 
 gameOver.onRestart = restartRun
 
-inspect.onMove = (building) => {
-  selectMarker.hide()
-  placement.beginMove(building)
-}
-inspect.onSell = (building) => {
-  selectMarker.hide()
-  placement.sell(building)
-}
-inspect.onClose = () => selectMarker.hide()
-
 // --- board interaction ------------------------------------------------------
 
 function describeCell(cell: Cell): string {
@@ -293,10 +334,13 @@ input.onSelect = (cell) => {
   selectMarker.show(cell)
 
   if (building) {
-    // The board is combat-only while a wave is running: inspection drops to a
-    // read-only status readout instead of offering Move/Sell.
+    // A tap always shows the read-only info card; Move/Merge/Sell are all
+    // reached by long-press-dragging the Construct itself, not from here.
     const running = sim.phase === SimPhase.Running
-    inspect.show(building, running ? { hp: sim.world.hp[building.simId], maxHp: sim.world.maxHp[building.simId], readOnly: true } : {})
+    inspect.show(
+      building,
+      running ? { hp: sim.world.hp[building.simId], maxHp: sim.world.maxHp[building.simId] } : {},
+    )
   } else {
     inspect.hide()
     toast.show(describeCell(cell), cell.state === CellState.Open)
@@ -307,6 +351,36 @@ input.onHover = (cell) => {
   if (placement.isActive) return
   if (cell && cell !== selectMarker.current) hoverMarker.show(cell)
   else hoverMarker.hide()
+}
+
+// Long-press any placed Construct to pick it up: drop it on an empty tile to
+// move it, on a matching Construct to merge, or on the recycle icon to sell
+// it — one drag, three outcomes, disambiguated by Placement/main.ts purely
+// from where it lands. Combat-only board rule applies here too: no picking
+// anything up mid-wave.
+input.onBuildingDragCandidate = (cell) => {
+  if (sim.phase === SimPhase.Running) return false
+  return !!registry.at(cell)
+}
+input.onBuildingDragStart = (cell) => {
+  const building = registry.at(cell)
+  if (!building) return
+  selectMarker.hide()
+  inspect.hide()
+  placement.beginMove(building, true)
+}
+input.onBuildingDragMove = (x, y, cell) => {
+  dragChip.move(x, y)
+  placement.previewAt(cell)
+  recycleZone.setArmed(recycleZone.contains(x, y))
+}
+input.onBuildingDragEnd = (cell, x, y) => {
+  if (placement.state.kind !== 'moving') return
+  if (recycleZone.contains(x, y)) {
+    placement.sellDragged()
+    return
+  }
+  placement.tapAt(cell)
 }
 
 // --- dev controls -----------------------------------------------------------
@@ -362,8 +436,8 @@ function syncReadyButton(): void {
     ? `Begin Wave ${wave}`
     : sim.phase === SimPhase.Running
       ? 'The wave rages on'
-      : shop.isOpen
-        ? 'Resolve the shop'
+      : placement.state.kind === 'moving'
+        ? 'Move, merge, or sell it'
         : 'Place your Construct'
   if (label === readyLabel) return
   readyLabel = label
@@ -371,15 +445,52 @@ function syncReadyButton(): void {
   readyBtn.disabled = !ready
 }
 
+/** Clear space between a building's measured roofline and its cooldown bar. */
+const COOLDOWN_BAR_MARGIN = 0.18
+
+/** Reused across frames to avoid a per-frame allocation. */
+const cooldownEntries: CooldownEntry[] = []
+
+/** Gathers spawn/attack cooldown progress for every Construct that has one. */
+function syncCooldownBars(): void {
+  cooldownEntries.length = 0
+  for (const building of registry.all()) {
+    if (building.simId < 0) continue
+    const spawn = building.def.spawn
+    const weapon = building.def.weapon
+
+    let progress: number
+    if (spawn) {
+      progress = 1 - sim.world.spawnTimer[building.simId]! / spawn.interval
+    } else if (weapon) {
+      const interval = sim.world.attackInterval[building.simId]!
+      if (interval <= 0) continue
+      progress = 1 - sim.world.cooldown[building.simId]! / interval
+    } else {
+      continue
+    }
+
+    cooldownEntries.push({
+      worldX: building.cell.worldX,
+      worldZ: building.cell.worldZ,
+      anchorY: building.cell.surfaceY + buildingHeight(building.def.id) + COOLDOWN_BAR_MARGIN,
+      progress,
+    })
+  }
+  cooldownBars.sync(cooldownEntries)
+}
+
 function render(alpha: number, wallDt: number): void {
   enemyView.sync(sim.world, alpha, wallDt)
   unitView.sync(sim.world, alpha, wallDt)
   projectileView.sync(sim.projectiles, alpha)
+  syncCooldownBars()
   if (sim.phase === SimPhase.Running) hud.setProgress(sim.waveProgress)
   eldree.update(wallDt)
   selectMarker.update(wallDt)
   placeMarker.update(wallDt)
   ghost.update(wallDt)
+  mergeHighlight.update(wallDt)
   rig.tick(wallDt)
   renderer.updateFog(rig.cameraDistance, rig.framedRadius)
   renderer.render()
@@ -436,7 +547,23 @@ openShop()
 // false in a production build, so this whole block is stripped from the bundle.
 if (import.meta.env.DEV) {
   Object.assign(window, {
-    game: { sim, grid, registry, economy, shop, rig, loop, gridView, enemyView, unitView, projectileView, startWave, restartRun },
+    game: {
+      sim,
+      grid,
+      registry,
+      economy,
+      shop,
+      placement,
+      input,
+      rig,
+      loop,
+      gridView,
+      enemyView,
+      unitView,
+      projectileView,
+      startWave,
+      restartRun,
+    },
   })
 }
 

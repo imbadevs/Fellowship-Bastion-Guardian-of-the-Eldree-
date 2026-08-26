@@ -6,6 +6,10 @@ import { BuildingView } from './BuildingView'
 
 const VALID_TINT = 0x2f7a3a
 const INVALID_TINT = 0x8a2f2a
+/** Matches MergeHighlight's marker colour, so the two read as one language. */
+const MERGE_TINT = 0x6a3f8a
+
+export type GhostState = 'valid' | 'invalid' | 'merge'
 
 /**
  * Translucent preview of the Construct being placed.
@@ -13,6 +17,11 @@ const INVALID_TINT = 0x8a2f2a
  * It hovers slightly above the tile and bobs, which does two things at once:
  * it reads as "not yet committed", and it keeps the silhouette clear of the
  * tile it is being judged against.
+ *
+ * `'merge'` is a distinct third state, not a shade of valid: dropping a
+ * purchase onto a matching Construct combines the two instead of failing as
+ * occupied, and the ghost shows the *resulting* tier-2 shape so the player
+ * sees what they are about to get, not what they are dragging.
  */
 export class GhostView {
   readonly mesh: THREE.Mesh
@@ -35,7 +44,7 @@ export class GhostView {
     this.mesh.renderOrder = 3
   }
 
-  show(id: BuildingId, cell: Cell, valid: boolean): void {
+  show(id: BuildingId, cell: Cell, state: GhostState): void {
     if (id !== this.currentId) {
       this.mesh.geometry = buildingGeometry(id)
       this.currentId = id
@@ -43,8 +52,8 @@ export class GhostView {
     this.baseY = cell.surfaceY + 0.16
     this.mesh.position.set(cell.worldX, this.baseY, cell.worldZ)
     this.mesh.rotation.y = BuildingView.yawFor(cell)
-    this.material.emissive.setHex(valid ? VALID_TINT : INVALID_TINT)
-    this.material.opacity = valid ? 0.62 : 0.45
+    this.material.emissive.setHex(state === 'valid' ? VALID_TINT : state === 'merge' ? MERGE_TINT : INVALID_TINT)
+    this.material.opacity = state === 'invalid' ? 0.45 : 0.62
     this.mesh.visible = true
   }
 

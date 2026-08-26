@@ -66,6 +66,15 @@ export interface BuildingDef {
   readonly hp: number
   readonly spawn?: SpawnProfile
   readonly weapon?: WeaponProfile
+  /**
+   * The tier-2 Construct two of this one merge into, if any.
+   *
+   * Only the four tier-1 spawners have one — the defensive structures have no
+   * tier-2 counterpart yet, so they are simply not mergeable. Kept as data
+   * rather than derived from `tier`/`name` so a future asymmetric family
+   * (three tier-1s, or a merge that changes category) is not a special case.
+   */
+  readonly upgradesTo?: BuildingId
 }
 
 export const BUILDINGS: Record<BuildingId, BuildingDef> = {
@@ -79,6 +88,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 60,
     glyph: 'WAR',
     spawn: { unitClass: UnitClass.Warrior, roster: 3, interval: 6 },
+    upgradesTo: 'warlodge',
   },
   warlodge: {
     id: 'warlodge',
@@ -101,6 +111,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 75,
     glyph: 'ARC',
     spawn: { unitClass: UnitClass.Archer, roster: 2, interval: 7 },
+    upgradesTo: 'bowspire',
   },
   bowspire: {
     id: 'bowspire',
@@ -123,6 +134,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 110,
     glyph: 'KNT',
     spawn: { unitClass: UnitClass.Knight, roster: 1, interval: 10 },
+    upgradesTo: 'bastion-keep',
   },
   'bastion-keep': {
     id: 'bastion-keep',
@@ -145,6 +157,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 130,
     glyph: 'MAG',
     spawn: { unitClass: UnitClass.Mage, roster: 1, interval: 9 },
+    upgradesTo: 'arcane-obelisk',
   },
   'arcane-obelisk': {
     id: 'arcane-obelisk',

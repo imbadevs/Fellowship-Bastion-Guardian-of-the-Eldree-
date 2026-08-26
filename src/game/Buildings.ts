@@ -53,6 +53,13 @@ export class BuildingRegistry {
   onPlaced: ((building: PlacedBuilding) => void) | null = null
   onRemoved: ((building: PlacedBuilding) => void) | null = null
   onMoved: ((building: PlacedBuilding) => void) | null = null
+  /**
+   * Fired instead of `onRemoved`/`onPlaced` for a merge — the caller needs
+   * both the outgoing Constructs and the new one together, in one event, so
+   * it can carry the combined garrison across rather than tearing it down
+   * and starting the upgrade from an empty roster.
+   */
+  onMerged: ((sources: readonly PlacedBuilding[], result: PlacedBuilding) => void) | null = null
 
   constructor(private readonly grid: HexGrid) {}
 
@@ -126,6 +133,42 @@ export class BuildingRegistry {
     this.onTypeChanged?.(building.def.id)
     this.onMoved?.(building)
     return true
+  }
+
+  /**
+   * Removes `sources` (one or two Constructs) and raises their upgrade on
+   * `cell` in their place. Deliberately does not go through `remove`/`place`
+   * — those fire `onRemoved`/`onPlaced`, which the sim wiring uses to tear
+   * down a garrison on removal and start a fresh one at zero on placement.
+   * A merge needs the two treated as one transition, not two independent
+   * events, so the sim can carry the combined garrison across instead.
+   */
+  merge(sources: readonly PlacedBuilding[], upgradeId: BuildingId, cell: Cell): PlacedBuilding | null {
+    if (this.validateCell(cell) !== PlacementError.Ok && !sources.some((s) => s.cell.index === cell.index)) {
+      return null
+    }
+
+    for (const source of sources) {
+      this.buildings.delete(source.entityId)
+      this.byCell.delete(source.cell.index)
+      source.cell.occupantId = -1
+    }
+
+    const result: PlacedBuilding = {
+      entityId: this.nextId++,
+      def: BUILDINGS[upgradeId],
+      cell,
+      simId: -1,
+    }
+    this.buildings.set(result.entityId, result)
+    this.byCell.set(cell.index, result)
+    cell.occupantId = result.entityId
+
+    const changedTypes = new Set(sources.map((s) => s.def.id))
+    changedTypes.add(upgradeId)
+    for (const id of changedTypes) this.onTypeChanged?.(id)
+    this.onMerged?.(sources, result)
+    return result
   }
 
   static refundFor(def: BuildingDef): number {

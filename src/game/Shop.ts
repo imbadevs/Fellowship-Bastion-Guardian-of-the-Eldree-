@@ -5,26 +5,31 @@ import type { Economy } from './Economy'
 
 const REROLL_BASE_COST = 10
 const REROLL_STEP = 5
-const SKIP_REFUND = 15
 const OFFER_SIZE = 3
 
 /**
- * The between-wave build draft: 1-of-3, reroll, or skip.
+ * The between-wave build draft.
  *
- * Deliberately does not touch Placement or the building registry — a chosen
- * card only becomes a purchase once the caller arms Placement with it, so this
- * class only ever manages the offer itself and the gold spent shaping it.
+ * Not a modal to open and close — the offer is meant to sit docked at the
+ * bottom of the screen for the whole Prep period, always visible alongside
+ * the board. Every slot the player can afford is buyable, not just one, plus
+ * reroll (redraws all 3, at an escalating cost). There is no "skip" action:
+ * with nothing to dismiss, the player just buys what they want and taps
+ * Ready when done. Deliberately does not touch Placement or the building
+ * registry — a bought slot only becomes a real Construct once the caller
+ * arms Placement with it, so this class only ever manages the offer itself
+ * and the gold spent shaping it.
  */
 export class Shop {
   private offer: BuildingId[] = []
+  private bought: boolean[] = []
   private rerollCount = 0
   private wave = 1
   private rng: Rng
-  isOpen = false
 
-  onOfferChanged: ((offer: readonly BuildingId[], rerollCost: number) => void) | null = null
+  onOfferChanged: ((offer: readonly BuildingId[], bought: readonly boolean[], rerollCost: number) => void) | null =
+    null
   onMessage: ((text: string, ok: boolean) => void) | null = null
-  onClosed: (() => void) | null = null
 
   constructor(
     private readonly economy: Economy,
@@ -37,18 +42,21 @@ export class Shop {
     return this.offer
   }
 
+  get boughtFlags(): readonly boolean[] {
+    return this.bought
+  }
+
   get rerollCost(): number {
     return REROLL_BASE_COST + this.rerollCount * REROLL_STEP
   }
 
-  /** Opens a fresh offer for `wave`. Reseeded per wave, like the sim's own RNG. */
+  /** Draws a fresh offer for `wave`. Reseeded per wave, like the sim's own RNG. */
   open(wave: number): void {
     this.wave = wave
     this.rng = new Rng(this.seed * 104729 + wave)
     this.rerollCount = 0
-    this.offer = drawOffer(wave, this.rng, OFFER_SIZE)
-    this.isOpen = true
-    this.onOfferChanged?.(this.offer, this.rerollCost)
+    this.setOffer(drawOffer(wave, this.rng, OFFER_SIZE))
+    this.notify()
   }
 
   reroll(): void {
@@ -59,24 +67,27 @@ export class Shop {
     this.rerollCount++
     // Continuing the same stream (not reseeding) is what makes each reroll a
     // genuinely fresh draw rather than cycling back through the same offer.
-    this.offer = drawOffer(this.wave, this.rng, OFFER_SIZE)
-    this.onOfferChanged?.(this.offer, this.rerollCost)
+    this.setOffer(drawOffer(this.wave, this.rng, OFFER_SIZE))
+    this.notify()
   }
 
-  skip(): void {
-    this.economy.grant(SKIP_REFUND)
-    this.onMessage?.(`Skipped the offer · +${SKIP_REFUND}g`, true)
-    this.close()
+  /** Marks a slot as bought. The other slots stay buyable. */
+  markBought(index: number): void {
+    if (this.bought[index]) return
+    this.bought[index] = true
   }
 
-  /** Call once the caller has armed Placement with a chosen card. */
-  choose(): void {
-    this.close()
+  /** Redraws the dock against the current offer, e.g. after a placement sub-step resolves. */
+  refresh(): void {
+    this.notify()
   }
 
-  private close(): void {
-    this.isOpen = false
-    this.offer = []
-    this.onClosed?.()
+  private setOffer(offer: BuildingId[]): void {
+    this.offer = offer
+    this.bought = offer.map(() => false)
+  }
+
+  private notify(): void {
+    this.onOfferChanged?.(this.offer, this.bought, this.rerollCost)
   }
 }

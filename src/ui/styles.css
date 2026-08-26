@@ -58,7 +58,7 @@ html, body {
   gap: 8px;
 }
 
-.region { display: flex; flex-direction: column; gap: 8px; }
+.region { position: relative; display: flex; flex-direction: column; gap: 8px; }
 .region > * { pointer-events: auto; }
 
 /* --- top band --------------------------------------------------------- */
@@ -124,20 +124,6 @@ html, body {
 .inspect.visible { display: block; }
 .inspect-title { font: 700 15px/1.3 system-ui, sans-serif; }
 .inspect-blurb { font: 400 12px/1.4 system-ui, sans-serif; color: var(--ink-dim); margin-top: 2px; }
-.inspect-actions { display: flex; gap: 8px; margin-top: 10px; }
-
-.inspect-actions button {
-  flex: 1;
-  min-height: 40px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--ink);
-  font: 600 13px/1 system-ui, sans-serif;
-}
-
-.inspect-actions .danger { color: var(--bad); }
-.inspect-actions .ghost { flex: 0 0 72px; color: var(--ink-dim); }
 
 .dev-bar { display: flex; gap: 6px; flex-wrap: wrap; }
 
@@ -279,85 +265,95 @@ html, body {
 
 .ready:not(:disabled):active { background: rgba(242, 196, 100, 0.26); }
 
-/* --- shop ---------------------------------------------------------------- */
+/* --- shop dock ------------------------------------------------------------
+ * Docked at the bottom for the whole Prep period — not a modal. The board
+ * stays visible and interaction-adjacent the entire time.
+ */
 
-.shop {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  display: none;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 24px 18px;
-  background: rgba(6, 8, 12, 0.92);
-  backdrop-filter: blur(6px);
-  pointer-events: auto;
-  text-align: center;
-}
-
-.shop.visible { display: flex; }
-.shop h1 { margin: 0; font: 700 22px/1.25 system-ui, sans-serif; color: var(--gold); }
-.shop-wave { margin: -6px 0 4px; font: 500 12px/1 system-ui, sans-serif; color: var(--ink-dim); }
-
-.shop-cards {
+.shop-dock {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  width: min(100%, 340px);
+  align-items: center;
+  gap: 8px;
 }
 
-.shop-card {
+.shop-dock.hidden { display: none; }
+
+.shop-dock-cards {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.shop-dock-card {
   --rarity-color: var(--ink-dim);
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  padding: 14px 16px;
-  border-radius: 14px;
+  padding: 10px 6px;
+  border-radius: 12px;
   border: 1px solid var(--line);
   border-top: 3px solid var(--rarity-color);
   background: var(--panel);
+  color: var(--ink);
   touch-action: none;
 }
 
-.shop-card-rarity {
-  font: 700 10px/1 ui-monospace, monospace;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--rarity-color);
+.shop-dock-card:disabled { opacity: 0.4; }
+.shop-dock-card.armed { outline: 2px solid var(--gold); }
+.shop-dock-card.bought { opacity: 0.55; }
+
+.shop-dock-card-name {
+  font: 700 12px/1.25 system-ui, sans-serif;
+  text-align: center;
 }
 
-.shop-card-name { font: 700 16px/1.2 system-ui, sans-serif; color: var(--ink); }
-.shop-card-blurb { font: 400 12px/1.4 system-ui, sans-serif; color: var(--ink-dim); }
+.shop-dock-card-cost { font: 700 12px/1 system-ui, sans-serif; color: var(--gold); }
+.shop-dock-card-built { font: 700 12px/1 system-ui, sans-serif; color: var(--good); }
 
-.shop-card button {
-  margin-top: 6px;
-  min-width: 160px;
-  min-height: 42px;
-  border-radius: 10px;
-  border: 1px solid rgba(242, 196, 100, 0.35);
-  background: rgba(242, 196, 100, 0.14);
-  color: var(--gold);
-  font: 700 13px/1 system-ui, sans-serif;
-}
-
-.shop-card button:disabled { border-color: var(--line); background: transparent; color: var(--ink-dim); }
-
-.shop-footer { display: flex; gap: 10px; margin-top: 4px; }
-
-.shop-footer button {
-  min-height: 40px;
-  padding: 0 16px;
-  border-radius: 10px;
+.shop-dock-reroll {
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.06);
   color: var(--ink-dim);
-  font: 600 12px/1 system-ui, sans-serif;
+  font: 600 11px/1 system-ui, sans-serif;
 }
 
-.shop-footer button:disabled { opacity: 0.4; }
+.shop-dock-reroll:disabled { opacity: 0.4; }
 
-.inspect-actions.readonly .danger,
-.inspect-actions.readonly button:first-child { display: none; }
+/* --- recycle zone -------------------------------------------------------
+ * The recycle-icon drop target for the unified move/merge/sell drag. Covers
+ * the shop dock's own area — nothing there is reachable mid-drag anyway.
+ */
+
+.region > .recycle-zone {
+  position: absolute;
+  inset: 0;
+  z-index: 11;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: 14px;
+  border: 1px dashed rgba(255, 122, 92, 0.45);
+  background: rgba(10, 6, 6, 0.94);
+  color: var(--bad);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.recycle-zone.visible { opacity: 1; }
+
+.recycle-zone.armed {
+  background: rgba(255, 122, 92, 0.26);
+  border-style: solid;
+  border-color: var(--bad);
+}
+
+.recycle-zone span { font: 700 13px/1 system-ui, sans-serif; letter-spacing: 0.03em; }
