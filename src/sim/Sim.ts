@@ -314,7 +314,10 @@ export class Sim {
 
   update(dt: number): void {
     this.world.snapshot()
-    this.spawnerStep(dt)
+    // Gated to Running so a spawner's cooldown only ticks — and only spends
+    // its garrison down and back up — during an actual fight, not while it
+    // sits idle through Prep with nothing to muster against.
+    if (this.phase === SimPhase.Running) this.spawnerStep(dt)
     this.rebuildSpatial()
 
     if (this.phase === SimPhase.Running) this.waveSpawnStep()
@@ -393,7 +396,7 @@ export class Sim {
     this.spawnedTotal++
   }
 
-  /** Constructs top their garrison back up to roster over time. */
+  /** Constructs top their garrison back up to roster over time, while a wave is running. */
   private spawnerStep(dt: number): void {
     const w = this.world
     for (let id = 0; id < w.capacity; id++) {
