@@ -35,9 +35,17 @@ export type BuildingId =
   | 'arcane-obelisk'
   | 'eldree-sanctum'
   | 'palisade'
+  | 'reinforced-palisade'
+  | 'stoneguard-wall'
   | 'ballista'
+  | 'heavy-ballista'
+  | 'siege-ballista'
   | 'rune-ward'
+  | 'rune-pillar'
+  | 'rune-nexus'
   | 'healing-shrine'
+  | 'blessed-shrine'
+  | 'eternal-wellspring'
 
 /** Consumed by SpawnerSystem in M4. */
 export interface SpawnProfile {
@@ -73,12 +81,11 @@ export interface BuildingDef {
   /**
    * The higher-tier Construct two of this one merge into, if any.
    *
-   * Chains two deep for the four spawner families (tier 1 to 2, and tier 2 to
-   * 3) — the defensive structures have no upgrade at all, so they are simply
-   * not mergeable. Kept as data rather than derived from `tier`/`name` so an
-   * asymmetric family (three tier-1s, or a merge that changes category) is
-   * not a special case, and so a family can stop upgrading at any tier by
-   * just omitting the field.
+   * Every family — the four spawners and the four defensive structures alike
+   * — chains two deep (tier 1 to 2, tier 2 to 3). Kept as data rather than
+   * derived from `tier`/`name` so an asymmetric family (three tier-1s, or a
+   * merge that changes category) is not a special case, and so a family
+   * could stop upgrading at any tier by just omitting the field.
    */
   readonly upgradesTo?: BuildingId
 }
@@ -233,6 +240,28 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     tier: 1,
     cost: 25,
     glyph: 'WALL',
+    upgradesTo: 'reinforced-palisade',
+  },
+  'reinforced-palisade': {
+    id: 'reinforced-palisade',
+    hp: 610,
+    name: 'Reinforced Palisade',
+    blurb: 'Thicker timber and stone, holding the line longer.',
+    category: BuildingCategory.Defense,
+    tier: 2,
+    cost: 55,
+    glyph: 'WALL II',
+    upgradesTo: 'stoneguard-wall',
+  },
+  'stoneguard-wall': {
+    id: 'stoneguard-wall',
+    hp: 850,
+    name: 'Stoneguard Wall',
+    blurb: 'A solid stone rampart the horde cannot easily break.',
+    category: BuildingCategory.Defense,
+    tier: 3,
+    cost: 120,
+    glyph: 'WALL III',
   },
   ballista: {
     id: 'ballista',
@@ -244,6 +273,30 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 95,
     glyph: 'BAL',
     weapon: { damage: 34, range: 3.5, cooldown: 1.8 },
+    upgradesTo: 'heavy-ballista',
+  },
+  'heavy-ballista': {
+    id: 'heavy-ballista',
+    hp: 350,
+    name: 'Heavy Ballista',
+    blurb: 'A larger frame, heavier bolts, longer reach.',
+    category: BuildingCategory.Defense,
+    tier: 2,
+    cost: 210,
+    glyph: 'BAL II',
+    weapon: { damage: 49, range: 4, cooldown: 1.5 },
+    upgradesTo: 'siege-ballista',
+  },
+  'siege-ballista': {
+    id: 'siege-ballista',
+    hp: 490,
+    name: 'Siege Ballista',
+    blurb: 'Siege-grade bolts that shatter armour outright.',
+    category: BuildingCategory.Defense,
+    tier: 3,
+    cost: 440,
+    glyph: 'BAL III',
+    weapon: { damage: 70, range: 4.5, cooldown: 1.3 },
   },
   'rune-ward': {
     id: 'rune-ward',
@@ -255,6 +308,30 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 120,
     glyph: 'RUNE',
     weapon: { damage: 14, range: 2, cooldown: 1.1, splash: 1.2 },
+    upgradesTo: 'rune-pillar',
+  },
+  'rune-pillar': {
+    id: 'rune-pillar',
+    hp: 300,
+    name: 'Rune Pillar',
+    blurb: 'A taller conduit, wider pulse, Wraiths cannot dodge.',
+    category: BuildingCategory.Defense,
+    tier: 2,
+    cost: 260,
+    glyph: 'RUNE II',
+    weapon: { damage: 20, range: 2.3, cooldown: 0.95, splash: 1.4 },
+    upgradesTo: 'rune-nexus',
+  },
+  'rune-nexus': {
+    id: 'rune-nexus',
+    hp: 420,
+    name: 'Rune Nexus',
+    blurb: 'Three wards fused into one relentless pulse.',
+    category: BuildingCategory.Defense,
+    tier: 3,
+    cost: 540,
+    glyph: 'RUNE III',
+    weapon: { damage: 26, range: 2.5, cooldown: 0.8, splash: 1.6 },
   },
   'healing-shrine': {
     id: 'healing-shrine',
@@ -265,14 +342,36 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     tier: 1,
     cost: 140,
     glyph: 'SHRN',
+    upgradesTo: 'blessed-shrine',
+  },
+  'blessed-shrine': {
+    id: 'blessed-shrine',
+    hp: 300,
+    name: 'Blessed Shrine',
+    blurb: 'A stronger blessing, faster to mend the wounded.',
+    category: BuildingCategory.Defense,
+    tier: 2,
+    cost: 300,
+    glyph: 'SHRN II',
+    upgradesTo: 'eternal-wellspring',
+  },
+  'eternal-wellspring': {
+    id: 'eternal-wellspring',
+    hp: 420,
+    name: 'Eternal Wellspring',
+    blurb: 'An unending font of blessing for the whole garrison.',
+    category: BuildingCategory.Defense,
+    tier: 3,
+    cost: 620,
+    glyph: 'SHRN III',
   },
 }
 
 /**
  * Shop draft pool. Tier-3 Constructs are deliberately absent — they are
  * reached only by merging a matching pair of tier-2s, never bought outright,
- * so the top of each spawner line stays an upgrade to earn rather than a
- * fourth card in the drop table.
+ * so the top of every family (spawner or defensive) stays an upgrade to earn
+ * rather than a fourth card in the drop table.
  */
 export const BUILDING_ORDER: readonly BuildingId[] = [
   'barracks',
@@ -287,6 +386,10 @@ export const BUILDING_ORDER: readonly BuildingId[] = [
   'bowspire',
   'bastion-keep',
   'arcane-obelisk',
+  'reinforced-palisade',
+  'heavy-ballista',
+  'rune-pillar',
+  'blessed-shrine',
 ]
 
 /** Fraction of cost returned when a Construct is sold. */
