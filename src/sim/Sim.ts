@@ -249,6 +249,13 @@ export class Sim {
    * means every spawner musters from zero again rather than fighting it with
    * whoever happened to survive the last one. Constructs themselves are
    * untouched; only their units and roster occupancy reset.
+   *
+   * Also resets `spawnTimer` to a full interval, same as a freshly placed
+   * Construct — a spawner sitting at roster cap holds its timer at (or below)
+   * zero indefinitely since `spawnerStep` only resets it after an actual
+   * spawn, not on a blocked attempt. Skipping this would let a full spawner's
+   * first replacement fire on the very next tick, undoing the wipe within a
+   * single frame instead of making the player wait out the interval.
    */
   private releaseAllGarrisons(): void {
     const w = this.world
@@ -256,7 +263,10 @@ export class Sim {
       if (w.alive[id] && w.category[id] === Category.Unit) w.kill(id)
     }
     for (let id = 0; id < w.capacity; id++) {
-      if (w.alive[id] && w.category[id] === Category.Construct) w.slotMask[id] = 0
+      if (w.alive[id] && w.category[id] === Category.Construct) {
+        w.slotMask[id] = 0
+        w.spawnTimer[id] = this.constructDefs[id]?.spawn?.interval ?? 0
+      }
     }
   }
 
