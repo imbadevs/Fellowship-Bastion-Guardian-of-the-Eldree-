@@ -244,6 +244,22 @@ export class Sim {
     }
   }
 
+  /**
+   * Wipes every Construct's garrison at once, on wave clear — a fresh wave
+   * means every spawner musters from zero again rather than fighting it with
+   * whoever happened to survive the last one. Constructs themselves are
+   * untouched; only their units and roster occupancy reset.
+   */
+  private releaseAllGarrisons(): void {
+    const w = this.world
+    for (let id = 0; id < w.capacity; id++) {
+      if (w.alive[id] && w.category[id] === Category.Unit) w.kill(id)
+    }
+    for (let id = 0; id < w.capacity; id++) {
+      if (w.alive[id] && w.category[id] === Category.Construct) w.slotMask[id] = 0
+    }
+  }
+
   // --- lifecycle ------------------------------------------------------------
 
   startWave(wave: number): void {
@@ -715,6 +731,7 @@ export class Sim {
   private checkWaveEnd(): void {
     if (this.spawnsRemaining > 0 || this.enemyCount > 0) return
     this.phase = SimPhase.Cleared
+    this.releaseAllGarrisons()
     this.events.onWaveCleared?.(this.wave)
   }
 }
