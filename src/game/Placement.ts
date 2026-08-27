@@ -1,5 +1,4 @@
-import { BUILDINGS, type BuildingDef, type BuildingId } from '../data/buildings'
-import type { Rng } from '../core/Rng'
+import { BUILDINGS, type BuildingId } from '../data/buildings'
 import type { Cell } from '../hex/HexGrid'
 import type { GhostView } from '../view/GhostView'
 import type { TileMarker } from '../view/TileMarker'
@@ -62,7 +61,6 @@ export class Placement {
     private readonly ghost: GhostView,
     private readonly marker: TileMarker,
     private readonly pick: PickFn,
-    private readonly rng: Rng,
   ) {}
 
   get state(): PlacementState {
@@ -212,15 +210,18 @@ export class Placement {
       return
     }
 
-    // A merge's result is drawn at random from a pool, so the ghost can't
-    // preview a specific outcome — it just keeps showing what's being
-    // dragged, tinted to signal "this drop merges" rather than "this is what
-    // you'll get". The actual result is announced once the merge commits.
+    // Dragging a purchase or a lifted Construct over a matching Construct
+    // previews the *merge result*, not the thing being dragged — the ghost
+    // shows what dropping here actually produces.
     const mergeTarget =
       state.kind === 'placing'
         ? this.mergeTargetAt(state.defId, cell)
         : this.mergeTargetAt(state.building.def.id, cell)
-    const defId = state.kind === 'placing' ? state.defId : state.building.def.id
+    const defId = mergeTarget
+      ? mergeTarget.def.upgradesTo!
+      : state.kind === 'placing'
+        ? state.defId
+        : state.building.def.id
     const error = this.check(cell, state)
     const valid = error === PlacementError.Ok
 
@@ -242,14 +243,8 @@ export class Placement {
   private mergeTargetAt(defId: BuildingId, cell: Cell | null): PlacedBuilding | null {
     if (!cell) return null
     const existing = this.registry.at(cell)
-    if (!existing || existing.def.id !== defId || !existing.def.upgradesTo?.length) return null
+    if (!existing || existing.def.id !== defId || !existing.def.upgradesTo) return null
     return existing
-  }
-
-  /** Draws this merge's result from `def`'s upgrade pool, equal odds per candidate. */
-  private rollUpgrade(def: BuildingDef): BuildingId {
-    const pool = def.upgradesTo!
-    return pool[this.rng.int(pool.length)]!
   }
 
   private check(cell: Cell | null, state: PlacementState): PlacementError {
@@ -315,15 +310,15 @@ export class Placement {
 
   /**
    * Buying `defId` directly onto a matching, already-placed Construct merges
-   * the two into a random draw from its upgrade pool instead of failing as
-   * "occupied" — the headline gesture the shop dock is built for: drag a card
-   * straight onto what you already have. Costs exactly what the fresh card
-   * would have cost standing alone; the existing Construct was already paid
-   * for when it was first raised, so merging itself adds no further toll.
+   * the two into its upgrade instead of failing as "occupied" — the
+   * headline gesture the shop dock is built for: drag a card straight onto
+   * what you already have. Costs exactly what the fresh card would have cost
+   * standing alone; the existing Construct was already paid for when it was
+   * first raised, so merging itself adds no further toll.
    */
   private commitPurchaseMerge(defId: BuildingId, existing: PlacedBuilding, cell: Cell): void {
     const def = BUILDINGS[defId]
-    const upgradeId = this.rollUpgrade(existing.def)
+    const upgradeId = existing.def.upgradesTo!
     if (!this.economy.spend(def.cost)) {
       this.onMessage?.(placementErrorText(PlacementError.Unaffordable), false)
       this.cancel()
@@ -341,7 +336,7 @@ export class Placement {
    * `commitPurchaseMerge`, free since both Constructs were already paid for.
    */
   private commitMoveMerge(source: PlacedBuilding, target: PlacedBuilding, cell: Cell): void {
-    const upgradeId = this.rollUpgrade(target.def)
+    const upgradeId = target.def.upgradesTo!
     this.registry.merge([source, target], upgradeId, cell)
     this.onMessage?.(`${BUILDINGS[upgradeId].name} raised from the merge`, true)
     this.clear()

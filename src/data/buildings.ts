@@ -71,25 +71,17 @@ export interface BuildingDef {
   readonly spawn?: SpawnProfile
   readonly weapon?: WeaponProfile
   /**
-   * The pool of higher-tier Constructs two of this one can merge into, if any.
+   * The higher-tier Construct two of this one merge into, if any.
    *
-   * A merge draws one candidate from this pool at random (equal odds) rather
-   * than always landing on the same result — two Barracks might raise a War
-   * Lodge again, or just as easily a Bowspire. Chains two deep for the four
-   * spawner families (tier 1 to 2, and tier 2 to 3) — the defensive
-   * structures have no pool at all, so they are simply not mergeable. Kept as
-   * data rather than derived from `tier`/`category` so a family can stop
-   * upgrading at any tier by just omitting the field, or one day draw from a
-   * different pool than its siblings.
+   * Chains two deep for the four spawner families (tier 1 to 2, and tier 2 to
+   * 3) — the defensive structures have no upgrade at all, so they are simply
+   * not mergeable. Kept as data rather than derived from `tier`/`name` so an
+   * asymmetric family (three tier-1s, or a merge that changes category) is
+   * not a special case, and so a family can stop upgrading at any tier by
+   * just omitting the field.
    */
-  readonly upgradesTo?: readonly BuildingId[]
+  readonly upgradesTo?: BuildingId
 }
-
-/** Every tier-2 spawner — the shared merge pool for all four tier-1 spawners. */
-const TIER2_SPAWNERS: readonly BuildingId[] = ['warlodge', 'bowspire', 'bastion-keep', 'arcane-obelisk']
-
-/** Every tier-3 spawner — the shared merge pool for all four tier-2 spawners. */
-const TIER3_SPAWNERS: readonly BuildingId[] = ['warhost', 'stormwatch-spire', 'highguard-citadel', 'eldree-sanctum']
 
 export const BUILDINGS: Record<BuildingId, BuildingDef> = {
   barracks: {
@@ -102,7 +94,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 60,
     glyph: 'WAR',
     spawn: { unitClass: UnitClass.Warrior, roster: 3, interval: 6 },
-    upgradesTo: TIER2_SPAWNERS,
+    upgradesTo: 'warlodge',
   },
   warlodge: {
     id: 'warlodge',
@@ -114,7 +106,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 150,
     glyph: 'WAR II',
     spawn: { unitClass: UnitClass.Warrior, roster: 5, interval: 4.5 },
-    upgradesTo: TIER3_SPAWNERS,
+    upgradesTo: 'warhost',
   },
   warhost: {
     id: 'warhost',
@@ -137,7 +129,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 75,
     glyph: 'ARC',
     spawn: { unitClass: UnitClass.Archer, roster: 2, interval: 7 },
-    upgradesTo: TIER2_SPAWNERS,
+    upgradesTo: 'bowspire',
   },
   bowspire: {
     id: 'bowspire',
@@ -149,7 +141,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 170,
     glyph: 'ARC II',
     spawn: { unitClass: UnitClass.Archer, roster: 3, interval: 5.5 },
-    upgradesTo: TIER3_SPAWNERS,
+    upgradesTo: 'stormwatch-spire',
   },
   'stormwatch-spire': {
     id: 'stormwatch-spire',
@@ -172,7 +164,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 110,
     glyph: 'KNT',
     spawn: { unitClass: UnitClass.Knight, roster: 1, interval: 10 },
-    upgradesTo: TIER2_SPAWNERS,
+    upgradesTo: 'bastion-keep',
   },
   'bastion-keep': {
     id: 'bastion-keep',
@@ -184,7 +176,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 230,
     glyph: 'KNT II',
     spawn: { unitClass: UnitClass.Knight, roster: 2, interval: 8 },
-    upgradesTo: TIER3_SPAWNERS,
+    upgradesTo: 'highguard-citadel',
   },
   'highguard-citadel': {
     id: 'highguard-citadel',
@@ -207,7 +199,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 130,
     glyph: 'MAG',
     spawn: { unitClass: UnitClass.Mage, roster: 1, interval: 9 },
-    upgradesTo: TIER2_SPAWNERS,
+    upgradesTo: 'arcane-obelisk',
   },
   'arcane-obelisk': {
     id: 'arcane-obelisk',
@@ -219,7 +211,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 260,
     glyph: 'MAG II',
     spawn: { unitClass: UnitClass.Mage, roster: 2, interval: 7.5 },
-    upgradesTo: TIER3_SPAWNERS,
+    upgradesTo: 'eldree-sanctum',
   },
   'eldree-sanctum': {
     id: 'eldree-sanctum',
