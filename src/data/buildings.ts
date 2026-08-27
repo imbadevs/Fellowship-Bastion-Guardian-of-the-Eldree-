@@ -24,12 +24,16 @@ export const enum UnitClass {
 export type BuildingId =
   | 'barracks'
   | 'warlodge'
+  | 'warhost'
   | 'archery-range'
   | 'bowspire'
+  | 'stormwatch-spire'
   | 'knights-hall'
   | 'bastion-keep'
+  | 'highguard-citadel'
   | 'mage-spire'
   | 'arcane-obelisk'
+  | 'eldree-sanctum'
   | 'palisade'
   | 'ballista'
   | 'rune-ward'
@@ -58,7 +62,7 @@ export interface BuildingDef {
   readonly name: string
   readonly blurb: string
   readonly category: BuildingCategory
-  readonly tier: 1 | 2
+  readonly tier: 1 | 2 | 3
   readonly cost: number
   /** Short label for the tray card. */
   readonly glyph: string
@@ -67,12 +71,14 @@ export interface BuildingDef {
   readonly spawn?: SpawnProfile
   readonly weapon?: WeaponProfile
   /**
-   * The tier-2 Construct two of this one merge into, if any.
+   * The higher-tier Construct two of this one merge into, if any.
    *
-   * Only the four tier-1 spawners have one — the defensive structures have no
-   * tier-2 counterpart yet, so they are simply not mergeable. Kept as data
-   * rather than derived from `tier`/`name` so a future asymmetric family
-   * (three tier-1s, or a merge that changes category) is not a special case.
+   * Chains two deep for the four spawner families (tier 1 to 2, and tier 2 to
+   * 3) — the defensive structures have no upgrade at all, so they are simply
+   * not mergeable. Kept as data rather than derived from `tier`/`name` so an
+   * asymmetric family (three tier-1s, or a merge that changes category) is
+   * not a special case, and so a family can stop upgrading at any tier by
+   * just omitting the field.
    */
   readonly upgradesTo?: BuildingId
 }
@@ -100,6 +106,18 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 150,
     glyph: 'WAR II',
     spawn: { unitClass: UnitClass.Warrior, roster: 5, interval: 4.5 },
+    upgradesTo: 'warhost',
+  },
+  warhost: {
+    id: 'warhost',
+    hp: 520,
+    name: 'Warhost Bastion',
+    blurb: 'A full warhost, primed to break any charge.',
+    category: BuildingCategory.Spawner,
+    tier: 3,
+    cost: 340,
+    glyph: 'WAR III',
+    spawn: { unitClass: UnitClass.Warrior, roster: 7, interval: 3.5 },
   },
   'archery-range': {
     id: 'archery-range',
@@ -123,6 +141,18 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 170,
     glyph: 'ARC II',
     spawn: { unitClass: UnitClass.Archer, roster: 3, interval: 5.5 },
+    upgradesTo: 'stormwatch-spire',
+  },
+  'stormwatch-spire': {
+    id: 'stormwatch-spire',
+    hp: 400,
+    name: 'Stormwatch Spire',
+    blurb: 'Massed Archers rain volleys from on high.',
+    category: BuildingCategory.Spawner,
+    tier: 3,
+    cost: 380,
+    glyph: 'ARC III',
+    spawn: { unitClass: UnitClass.Archer, roster: 4, interval: 4.3 },
   },
   'knights-hall': {
     id: 'knights-hall',
@@ -146,6 +176,18 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 230,
     glyph: 'KNT II',
     spawn: { unitClass: UnitClass.Knight, roster: 2, interval: 8 },
+    upgradesTo: 'highguard-citadel',
+  },
+  'highguard-citadel': {
+    id: 'highguard-citadel',
+    hp: 640,
+    name: 'Highguard Citadel',
+    blurb: 'A four-towered garrison, unbreakable and swift to rehorse.',
+    category: BuildingCategory.Spawner,
+    tier: 3,
+    cost: 460,
+    glyph: 'KNT III',
+    spawn: { unitClass: UnitClass.Knight, roster: 3, interval: 6.5 },
   },
   'mage-spire': {
     id: 'mage-spire',
@@ -169,6 +211,18 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 260,
     glyph: 'MAG II',
     spawn: { unitClass: UnitClass.Mage, roster: 2, interval: 7.5 },
+    upgradesTo: 'eldree-sanctum',
+  },
+  'eldree-sanctum': {
+    id: 'eldree-sanctum',
+    hp: 380,
+    name: 'Eldree Sanctum',
+    blurb: 'A ring of Mages channel the Eldree at full strength.',
+    category: BuildingCategory.Spawner,
+    tier: 3,
+    cost: 480,
+    glyph: 'MAG III',
+    spawn: { unitClass: UnitClass.Mage, roster: 3, interval: 6.2 },
   },
   palisade: {
     id: 'palisade',
@@ -214,6 +268,12 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
   },
 }
 
+/**
+ * Shop draft pool. Tier-3 Constructs are deliberately absent — they are
+ * reached only by merging a matching pair of tier-2s, never bought outright,
+ * so the top of each spawner line stays an upgrade to earn rather than a
+ * fourth card in the drop table.
+ */
 export const BUILDING_ORDER: readonly BuildingId[] = [
   'barracks',
   'archery-range',

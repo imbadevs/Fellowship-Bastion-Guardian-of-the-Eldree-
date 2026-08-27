@@ -310,7 +310,7 @@ export class Placement {
 
   /**
    * Buying `defId` directly onto a matching, already-placed Construct merges
-   * the two into the tier-2 upgrade instead of failing as "occupied" — the
+   * the two into its upgrade instead of failing as "occupied" — the
    * headline gesture the shop dock is built for: drag a card straight onto
    * what you already have. Costs exactly what the fresh card would have cost
    * standing alone; the existing Construct was already paid for when it was

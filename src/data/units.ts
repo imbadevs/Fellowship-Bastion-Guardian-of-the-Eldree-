@@ -131,5 +131,5 @@ export const UNIT_CLASSES: readonly UnitClass[] = [
   UnitClass.Mage,
 ]
 
-/** Stat multiplier applied to units from a tier-2 Construct. */
-export const TIER_SCALING: Record<number, number> = { 1: 1, 2: 1.45 }
+/** Stat multiplier applied to units from a tier-2 or tier-3 Construct. */
+export const TIER_SCALING: Record<number, number> = { 1: 1, 2: 1.45, 3: 1.9 }

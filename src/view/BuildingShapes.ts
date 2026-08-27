@@ -57,6 +57,16 @@ const SHAPES: Record<BuildingId, () => PartSpec[]> = {
     ...banner(0.4, GOLD),
   ],
 
+  warhost: () => [
+    { geo: box(1.14, 0.6, 0.96), color: STONE, pos: [0, 0.3, 0] },
+    { geo: box(1.18, 0.1, 1.0), color: STONE_DARK, pos: [0, 0.05, 0] },
+    { geo: cone(0.4, 0.42, 4), color: ROOF_RED, pos: [-0.36, 0.82, 0], rot: [0, Math.PI / 4, 0] },
+    { geo: cone(0.4, 0.42, 4), color: ROOF_RED, pos: [0, 0.86, 0], rot: [0, Math.PI / 4, 0] },
+    { geo: cone(0.4, 0.42, 4), color: ROOF_RED, pos: [0.36, 0.82, 0], rot: [0, Math.PI / 4, 0] },
+    ...banner(-0.5, GOLD),
+    ...banner(0.5, GOLD),
+  ],
+
   'archery-range': () => [
     { geo: box(1.0, 0.16, 0.9), color: WOOD, pos: [0, 0.08, 0] },
     { geo: cyl(0.05, 0.05, 0.55, 6), color: WOOD_DARK, pos: [-0.38, 0.43, -0.3] },
@@ -71,6 +81,16 @@ const SHAPES: Record<BuildingId, () => PartSpec[]> = {
     { geo: cyl(0.46, 0.46, 0.1, 8), color: STONE_DARK, pos: [0, 1.05, 0] },
     { geo: cone(0.44, 0.36, 8), color: ROOF_GREEN, pos: [0, 1.28, 0] },
     { geo: box(0.5, 0.06, 0.06), color: WOOD_DARK, pos: [0, 0.72, 0.3] },
+  ],
+
+  'stormwatch-spire': () => [
+    { geo: cyl(0.3, 0.4, 1.3, 8), color: STONE, pos: [0, 0.65, 0] },
+    { geo: cyl(0.5, 0.5, 0.1, 8), color: STONE_DARK, pos: [0, 1.32, 0] },
+    { geo: cyl(0.22, 0.3, 0.6, 8), color: STONE, pos: [0, 1.67, 0] },
+    { geo: cyl(0.42, 0.42, 0.08, 8), color: STONE_DARK, pos: [0, 2.0, 0] },
+    { geo: cone(0.4, 0.4, 8), color: ROOF_GREEN, pos: [0, 2.24, 0] },
+    { geo: box(0.5, 0.06, 0.06), color: WOOD_DARK, pos: [0, 0.9, 0.34] },
+    { geo: box(0.4, 0.06, 0.06), color: WOOD_DARK, pos: [0, 1.5, 0.28] },
   ],
 
   'knights-hall': () => [
@@ -91,6 +111,19 @@ const SHAPES: Record<BuildingId, () => PartSpec[]> = {
     { geo: gem(0.2), color: STEEL, pos: [0, 0.52, 0.4] },
   ],
 
+  'highguard-citadel': () => [
+    { geo: box(0.9, 0.7, 0.86), color: STONE, pos: [0, 0.35, 0] },
+    { geo: cyl(0.19, 0.21, 1.0, 8), color: STONE_DARK, pos: [-0.42, 0.5, 0.36] },
+    { geo: cyl(0.19, 0.21, 1.0, 8), color: STONE_DARK, pos: [0.42, 0.5, 0.36] },
+    { geo: cyl(0.19, 0.21, 1.0, 8), color: STONE_DARK, pos: [-0.42, 0.5, -0.36] },
+    { geo: cyl(0.19, 0.21, 1.0, 8), color: STONE_DARK, pos: [0.42, 0.5, -0.36] },
+    { geo: cone(0.26, 0.32, 8), color: STEEL_DARK, pos: [-0.42, 1.16, 0.36] },
+    { geo: cone(0.26, 0.32, 8), color: STEEL_DARK, pos: [0.42, 1.16, 0.36] },
+    { geo: cone(0.26, 0.32, 8), color: STEEL_DARK, pos: [-0.42, 1.16, -0.36] },
+    { geo: cone(0.26, 0.32, 8), color: STEEL_DARK, pos: [0.42, 1.16, -0.36] },
+    { geo: gem(0.24), color: STEEL, pos: [0, 0.78, 0] },
+  ],
+
   'mage-spire': () => [
     { geo: cyl(0.17, 0.4, 0.98, 7), color: 0x4a4468, pos: [0, 0.49, 0] },
     { geo: cyl(0.24, 0.24, 0.08, 7), color: ARCANE, pos: [0, 1.0, 0] },
@@ -102,6 +135,16 @@ const SHAPES: Record<BuildingId, () => PartSpec[]> = {
     { geo: cone(0.14, 0.24, 4), color: ARCANE, pos: [0, 1.42, 0], rot: [0, Math.PI / 4, 0] },
     { geo: gem(0.15), color: CRYSTAL, pos: [-0.36, 0.86, 0.1] },
     { geo: gem(0.15), color: CRYSTAL, pos: [0.36, 1.04, -0.1] },
+  ],
+
+  'eldree-sanctum': () => [
+    { geo: cyl(0.34, 0.4, 0.16, 8), color: 0x40395c, pos: [0, 0.08, 0] },
+    { geo: cyl(0.12, 0.34, 1.6, 4), color: 0x40395c, pos: [0, 0.86, 0], rot: [0, Math.PI / 4, 0] },
+    { geo: cone(0.16, 0.28, 4), color: ARCANE, pos: [0, 1.78, 0], rot: [0, Math.PI / 4, 0] },
+    { geo: gem(0.16), color: CRYSTAL, pos: [-0.38, 0.6, 0.22] },
+    { geo: gem(0.16), color: CRYSTAL, pos: [0.38, 0.78, -0.18] },
+    { geo: gem(0.16), color: CRYSTAL, pos: [0, 1.0, 0.38] },
+    { geo: gem(0.18), color: CRYSTAL, pos: [0, 2.0, 0] },
   ],
 
   palisade: () => [

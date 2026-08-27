@@ -27,6 +27,12 @@ export const BUILDING_RARITY: Record<BuildingId, Rarity> = {
   bowspire: Rarity.Rare,
   'bastion-keep': Rarity.Rare,
   'arcane-obelisk': Rarity.Rare,
+  // Tier-3 Constructs never appear in `BUILDING_ORDER`'s draft pool — merge-only
+  // — but the map is a `Record<BuildingId, Rarity>`, so these still need an entry.
+  warhost: Rarity.Rare,
+  'stormwatch-spire': Rarity.Rare,
+  'highguard-citadel': Rarity.Rare,
+  'eldree-sanctum': Rarity.Rare,
 }
 
 export const RARITY_LABEL: Record<Rarity, string> = {

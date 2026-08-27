@@ -20,8 +20,8 @@ export type GhostState = 'valid' | 'invalid' | 'merge'
  *
  * `'merge'` is a distinct third state, not a shade of valid: dropping a
  * purchase onto a matching Construct combines the two instead of failing as
- * occupied, and the ghost shows the *resulting* tier-2 shape so the player
- * sees what they are about to get, not what they are dragging.
+ * occupied, and the ghost shows the *resulting* upgrade's shape (tier 2 or 3)
+ * so the player sees what they are about to get, not what they are dragging.
  */
 export class GhostView {
   readonly mesh: THREE.Mesh
