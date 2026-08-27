@@ -24,16 +24,28 @@ export const enum UnitClass {
 export type BuildingId =
   | 'barracks'
   | 'warlodge'
+  | 'warhost'
   | 'archery-range'
   | 'bowspire'
+  | 'stormwatch-spire'
   | 'knights-hall'
   | 'bastion-keep'
+  | 'highguard-citadel'
   | 'mage-spire'
   | 'arcane-obelisk'
+  | 'eldree-sanctum'
   | 'palisade'
+  | 'reinforced-palisade'
+  | 'stoneguard-wall'
   | 'ballista'
+  | 'heavy-ballista'
+  | 'siege-ballista'
   | 'rune-ward'
+  | 'rune-pillar'
+  | 'rune-nexus'
   | 'healing-shrine'
+  | 'blessed-shrine'
+  | 'eternal-wellspring'
 
 /** Consumed by SpawnerSystem in M4. */
 export interface SpawnProfile {
@@ -58,7 +70,7 @@ export interface BuildingDef {
   readonly name: string
   readonly blurb: string
   readonly category: BuildingCategory
-  readonly tier: 1 | 2
+  readonly tier: 1 | 2 | 3
   readonly cost: number
   /** Short label for the tray card. */
   readonly glyph: string
@@ -67,12 +79,13 @@ export interface BuildingDef {
   readonly spawn?: SpawnProfile
   readonly weapon?: WeaponProfile
   /**
-   * The tier-2 Construct two of this one merge into, if any.
+   * The higher-tier Construct two of this one merge into, if any.
    *
-   * Only the four tier-1 spawners have one — the defensive structures have no
-   * tier-2 counterpart yet, so they are simply not mergeable. Kept as data
-   * rather than derived from `tier`/`name` so a future asymmetric family
-   * (three tier-1s, or a merge that changes category) is not a special case.
+   * Every family — the four spawners and the four defensive structures alike
+   * — chains two deep (tier 1 to 2, tier 2 to 3). Kept as data rather than
+   * derived from `tier`/`name` so an asymmetric family (three tier-1s, or a
+   * merge that changes category) is not a special case, and so a family
+   * could stop upgrading at any tier by just omitting the field.
    */
   readonly upgradesTo?: BuildingId
 }
@@ -100,6 +113,18 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 150,
     glyph: 'WAR II',
     spawn: { unitClass: UnitClass.Warrior, roster: 5, interval: 4.5 },
+    upgradesTo: 'warhost',
+  },
+  warhost: {
+    id: 'warhost',
+    hp: 520,
+    name: 'Warhost Bastion',
+    blurb: 'A full warhost, primed to break any charge.',
+    category: BuildingCategory.Spawner,
+    tier: 3,
+    cost: 340,
+    glyph: 'WAR III',
+    spawn: { unitClass: UnitClass.Warrior, roster: 7, interval: 3.5 },
   },
   'archery-range': {
     id: 'archery-range',
@@ -123,6 +148,18 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 170,
     glyph: 'ARC II',
     spawn: { unitClass: UnitClass.Archer, roster: 3, interval: 5.5 },
+    upgradesTo: 'stormwatch-spire',
+  },
+  'stormwatch-spire': {
+    id: 'stormwatch-spire',
+    hp: 400,
+    name: 'Stormwatch Spire',
+    blurb: 'Massed Archers rain volleys from on high.',
+    category: BuildingCategory.Spawner,
+    tier: 3,
+    cost: 380,
+    glyph: 'ARC III',
+    spawn: { unitClass: UnitClass.Archer, roster: 4, interval: 4.3 },
   },
   'knights-hall': {
     id: 'knights-hall',
@@ -146,6 +183,18 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 230,
     glyph: 'KNT II',
     spawn: { unitClass: UnitClass.Knight, roster: 2, interval: 8 },
+    upgradesTo: 'highguard-citadel',
+  },
+  'highguard-citadel': {
+    id: 'highguard-citadel',
+    hp: 640,
+    name: 'Highguard Citadel',
+    blurb: 'A four-towered garrison, unbreakable and swift to rehorse.',
+    category: BuildingCategory.Spawner,
+    tier: 3,
+    cost: 460,
+    glyph: 'KNT III',
+    spawn: { unitClass: UnitClass.Knight, roster: 3, interval: 6.5 },
   },
   'mage-spire': {
     id: 'mage-spire',
@@ -169,6 +218,18 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 260,
     glyph: 'MAG II',
     spawn: { unitClass: UnitClass.Mage, roster: 2, interval: 7.5 },
+    upgradesTo: 'eldree-sanctum',
+  },
+  'eldree-sanctum': {
+    id: 'eldree-sanctum',
+    hp: 380,
+    name: 'Eldree Sanctum',
+    blurb: 'A ring of Mages channel the Eldree at full strength.',
+    category: BuildingCategory.Spawner,
+    tier: 3,
+    cost: 480,
+    glyph: 'MAG III',
+    spawn: { unitClass: UnitClass.Mage, roster: 3, interval: 6.2 },
   },
   palisade: {
     id: 'palisade',
@@ -179,6 +240,28 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     tier: 1,
     cost: 25,
     glyph: 'WALL',
+    upgradesTo: 'reinforced-palisade',
+  },
+  'reinforced-palisade': {
+    id: 'reinforced-palisade',
+    hp: 610,
+    name: 'Reinforced Palisade',
+    blurb: 'Thicker timber and stone, holding the line longer.',
+    category: BuildingCategory.Defense,
+    tier: 2,
+    cost: 55,
+    glyph: 'WALL II',
+    upgradesTo: 'stoneguard-wall',
+  },
+  'stoneguard-wall': {
+    id: 'stoneguard-wall',
+    hp: 850,
+    name: 'Stoneguard Wall',
+    blurb: 'A solid stone rampart the horde cannot easily break.',
+    category: BuildingCategory.Defense,
+    tier: 3,
+    cost: 120,
+    glyph: 'WALL III',
   },
   ballista: {
     id: 'ballista',
@@ -190,6 +273,30 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 95,
     glyph: 'BAL',
     weapon: { damage: 34, range: 3.5, cooldown: 1.8 },
+    upgradesTo: 'heavy-ballista',
+  },
+  'heavy-ballista': {
+    id: 'heavy-ballista',
+    hp: 350,
+    name: 'Heavy Ballista',
+    blurb: 'A larger frame, heavier bolts, longer reach.',
+    category: BuildingCategory.Defense,
+    tier: 2,
+    cost: 210,
+    glyph: 'BAL II',
+    weapon: { damage: 49, range: 4, cooldown: 1.5 },
+    upgradesTo: 'siege-ballista',
+  },
+  'siege-ballista': {
+    id: 'siege-ballista',
+    hp: 490,
+    name: 'Siege Ballista',
+    blurb: 'Siege-grade bolts that shatter armour outright.',
+    category: BuildingCategory.Defense,
+    tier: 3,
+    cost: 440,
+    glyph: 'BAL III',
+    weapon: { damage: 70, range: 4.5, cooldown: 1.3 },
   },
   'rune-ward': {
     id: 'rune-ward',
@@ -201,6 +308,30 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 120,
     glyph: 'RUNE',
     weapon: { damage: 14, range: 2, cooldown: 1.1, splash: 1.2 },
+    upgradesTo: 'rune-pillar',
+  },
+  'rune-pillar': {
+    id: 'rune-pillar',
+    hp: 300,
+    name: 'Rune Pillar',
+    blurb: 'A taller conduit, wider pulse, Wraiths cannot dodge.',
+    category: BuildingCategory.Defense,
+    tier: 2,
+    cost: 260,
+    glyph: 'RUNE II',
+    weapon: { damage: 20, range: 2.3, cooldown: 0.95, splash: 1.4 },
+    upgradesTo: 'rune-nexus',
+  },
+  'rune-nexus': {
+    id: 'rune-nexus',
+    hp: 420,
+    name: 'Rune Nexus',
+    blurb: 'Three wards fused into one relentless pulse.',
+    category: BuildingCategory.Defense,
+    tier: 3,
+    cost: 540,
+    glyph: 'RUNE III',
+    weapon: { damage: 26, range: 2.5, cooldown: 0.8, splash: 1.6 },
   },
   'healing-shrine': {
     id: 'healing-shrine',
@@ -211,9 +342,37 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     tier: 1,
     cost: 140,
     glyph: 'SHRN',
+    upgradesTo: 'blessed-shrine',
+  },
+  'blessed-shrine': {
+    id: 'blessed-shrine',
+    hp: 300,
+    name: 'Blessed Shrine',
+    blurb: 'A stronger blessing, faster to mend the wounded.',
+    category: BuildingCategory.Defense,
+    tier: 2,
+    cost: 300,
+    glyph: 'SHRN II',
+    upgradesTo: 'eternal-wellspring',
+  },
+  'eternal-wellspring': {
+    id: 'eternal-wellspring',
+    hp: 420,
+    name: 'Eternal Wellspring',
+    blurb: 'An unending font of blessing for the whole garrison.',
+    category: BuildingCategory.Defense,
+    tier: 3,
+    cost: 620,
+    glyph: 'SHRN III',
   },
 }
 
+/**
+ * Shop draft pool. Tier-3 Constructs are deliberately absent — they are
+ * reached only by merging a matching pair of tier-2s, never bought outright,
+ * so the top of every family (spawner or defensive) stays an upgrade to earn
+ * rather than a fourth card in the drop table.
+ */
 export const BUILDING_ORDER: readonly BuildingId[] = [
   'barracks',
   'archery-range',
@@ -227,6 +386,10 @@ export const BUILDING_ORDER: readonly BuildingId[] = [
   'bowspire',
   'bastion-keep',
   'arcane-obelisk',
+  'reinforced-palisade',
+  'heavy-ballista',
+  'rune-pillar',
+  'blessed-shrine',
 ]
 
 /** Fraction of cost returned when a Construct is sold. */

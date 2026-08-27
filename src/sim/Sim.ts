@@ -244,6 +244,32 @@ export class Sim {
     }
   }
 
+  /**
+   * Wipes every Construct's garrison at once, on wave clear — a fresh wave
+   * means every spawner musters from zero again rather than fighting it with
+   * whoever happened to survive the last one. Constructs themselves are
+   * untouched; only their units and roster occupancy reset.
+   *
+   * Also resets `spawnTimer` to a full interval, same as a freshly placed
+   * Construct — a spawner sitting at roster cap holds its timer at (or below)
+   * zero indefinitely since `spawnerStep` only resets it after an actual
+   * spawn, not on a blocked attempt. Skipping this would let a full spawner's
+   * first replacement fire on the very next tick, undoing the wipe within a
+   * single frame instead of making the player wait out the interval.
+   */
+  private releaseAllGarrisons(): void {
+    const w = this.world
+    for (let id = 0; id < w.capacity; id++) {
+      if (w.alive[id] && w.category[id] === Category.Unit) w.kill(id)
+    }
+    for (let id = 0; id < w.capacity; id++) {
+      if (w.alive[id] && w.category[id] === Category.Construct) {
+        w.slotMask[id] = 0
+        w.spawnTimer[id] = this.constructDefs[id]?.spawn?.interval ?? 0
+      }
+    }
+  }
+
   // --- lifecycle ------------------------------------------------------------
 
   startWave(wave: number): void {
@@ -288,7 +314,10 @@ export class Sim {
 
   update(dt: number): void {
     this.world.snapshot()
-    this.spawnerStep(dt)
+    // Gated to Running so a spawner's cooldown only ticks — and only spends
+    // its garrison down and back up — during an actual fight, not while it
+    // sits idle through Prep with nothing to muster against.
+    if (this.phase === SimPhase.Running) this.spawnerStep(dt)
     this.rebuildSpatial()
 
     if (this.phase === SimPhase.Running) this.waveSpawnStep()
@@ -367,7 +396,7 @@ export class Sim {
     this.spawnedTotal++
   }
 
-  /** Constructs top their garrison back up to roster over time. */
+  /** Constructs top their garrison back up to roster over time, while a wave is running. */
   private spawnerStep(dt: number): void {
     const w = this.world
     for (let id = 0; id < w.capacity; id++) {
@@ -715,6 +744,7 @@ export class Sim {
   private checkWaveEnd(): void {
     if (this.spawnsRemaining > 0 || this.enemyCount > 0) return
     this.phase = SimPhase.Cleared
+    this.releaseAllGarrisons()
     this.events.onWaveCleared?.(this.wave)
   }
 }

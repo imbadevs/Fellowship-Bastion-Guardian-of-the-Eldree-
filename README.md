@@ -150,7 +150,7 @@ reward → shop, indefinitely, with no scripted wave cap.
 
 **Move, Merge and Sell are one drag gesture.** Tapping a Construct only ever
 shows a read-only info card (name, blurb, live HP mid-combat) — no buttons.
-To act on it, press and hold; after a beat (~380ms) it picks up, and where
+To act on it, press and hold; after a beat (~180ms) it picks up, and where
 you drop it decides the outcome:
 
 - **Drop on an empty tile** — moves it there, free.
