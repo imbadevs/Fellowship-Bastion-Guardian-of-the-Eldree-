@@ -1,4 +1,5 @@
 import { Loop } from './core/Loop'
+import { Rng } from './core/Rng'
 import { HexGrid, type Cell } from './hex/HexGrid'
 import { CellState } from './data/grid'
 import { Renderer } from './view/Renderer'
@@ -128,7 +129,8 @@ sim.events.onConstructDestroyed = (simId) => {
 }
 
 const input = new InputController(canvas, rig, gridView, grid)
-const placement = new Placement(registry, economy, ghost, placeMarker, (x, y) => input.pick(x, y))
+const mergeRng = new Rng(RUN_SEED + 1)
+const placement = new Placement(registry, economy, ghost, placeMarker, (x, y) => input.pick(x, y), mergeRng)
 const shop = new Shop(economy, RUN_SEED)
 
 // --- ui ---------------------------------------------------------------------
