@@ -8,7 +8,7 @@ import type { Cell, HexGrid } from '../hex/HexGrid'
 const TAP_SLOP = 10
 const TAP_MAX_MS = 400
 /** How long a stationary press on an eligible Construct takes to pick it up. */
-const LONG_PRESS_MS = 380
+const LONG_PRESS_MS = 180
 /** Matches Placement's TOUCH_PICK_OFFSET — the finger covers the tile otherwise. */
 const TOUCH_PICK_OFFSET = 64
 
