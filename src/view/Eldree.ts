@@ -2,6 +2,17 @@ import * as THREE from 'three'
 import { bake, cyl, gem, type PartSpec } from './MeshKit'
 
 /**
+ * Slightly larger than its tile at the starting ring 2 — enough to read as
+ * the board's focal point without its canopy swallowing the neighbouring
+ * build slots.
+ */
+const BASE_SCALE = 0.98
+/** Extra scale per ring beyond the starting one, once a wave unlocks it. */
+const SCALE_PER_RING = 0.22
+/** Ring the board opens at, before any expansion — scale growth starts past this. */
+const BASE_RING = 2
+
+/**
  * Placeholder Eldree — the Sacred Tree at ring 0, and the thing losing the run
  * means losing. Procedural primitives, replaced by authored glTF in M7.
  *
@@ -18,6 +29,8 @@ export class Eldree {
   private readonly glow: THREE.PointLight
   private time = 0
   private hurt = 0
+  private scale = BASE_SCALE
+  private targetScale = BASE_SCALE
 
   constructor(surfaceY: number) {
     const material = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })
@@ -49,14 +62,27 @@ export class Eldree {
     this.group.add(this.glow)
 
     this.group.position.y = surfaceY
-    // Slightly larger than its tile — enough to read as the board's focal point
-    // without its canopy swallowing the neighbouring build slots.
-    this.group.scale.setScalar(0.98)
+    this.group.scale.setScalar(this.scale)
   }
 
   /** Flashes the canopy light. Called when the Eldree is struck. */
   flash(): void {
     this.hurt = 1
+  }
+
+  /**
+   * Grows the Eldree to match the board's outermost unlocked ring — the
+   * bastion's expansion is the Eldree's own growth, not just more tiles
+   * around it. `animate` mirrors `CameraRig.fitBoard`'s: false snaps
+   * immediately (a run restart dropping back to the starting ring), true
+   * eases toward it in `update` the way a mid-run ring unlock should.
+   */
+  growForRing(ring: number, animate = true): void {
+    this.targetScale = BASE_SCALE + Math.max(0, ring - BASE_RING) * SCALE_PER_RING
+    if (!animate) {
+      this.scale = this.targetScale
+      this.group.scale.setScalar(this.scale)
+    }
   }
 
   /** Driven by wall time, not sim time — idle motion must not affect combat. */
@@ -70,5 +96,13 @@ export class Eldree {
     this.glow.color.setHex(this.hurt > 0.02 ? 0xff6a4a : 0xffe9a8)
     // A struck tree shudders; the shake decays with the flash.
     this.canopy.rotation.z = this.hurt * Math.sin(this.time * 40) * 0.06
+
+    if (Math.abs(this.targetScale - this.scale) > 0.0005) {
+      // Same frame-rate-independent exponential ease CameraRig uses for its
+      // own board-expansion pull-back, so the two reads as one animation.
+      const k = 1 - Math.exp(-dt * 5)
+      this.scale += (this.targetScale - this.scale) * k
+      this.group.scale.setScalar(this.scale)
+    }
   }
 }

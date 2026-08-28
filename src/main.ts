@@ -416,6 +416,7 @@ function update(dt: number): void {
 function expandBoard(animate = true): void {
   gridView.rebuild()
   rig.fitBoard(grid.visibleWorldRadius, animate)
+  eldree.growForRing(grid.visibleRing, animate)
   countUnlocked()
   // New tiles change what is reachable, so the horde's routing is stale.
   sim.rebuildRouting()
