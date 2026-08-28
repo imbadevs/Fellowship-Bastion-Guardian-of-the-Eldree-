@@ -318,13 +318,19 @@ html, body {
   min-height: 34px;
   padding: 0 14px;
   border-radius: 999px;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--ink-dim);
-  font: 600 11px/1 system-ui, sans-serif;
+  border: 1px solid rgba(242, 196, 100, 0.45);
+  background: rgba(242, 196, 100, 0.14);
+  color: var(--gold);
+  font: 700 11px/1 system-ui, sans-serif;
 }
 
-.shop-dock-reroll:disabled { opacity: 0.4; }
+.shop-dock-reroll:disabled {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ink-dim);
+}
+
+.shop-dock-reroll:not(:disabled):active { background: rgba(242, 196, 100, 0.26); }
 
 /* --- recycle zone -------------------------------------------------------
  * The recycle-icon drop target for the unified move/merge/sell drag. Covers
