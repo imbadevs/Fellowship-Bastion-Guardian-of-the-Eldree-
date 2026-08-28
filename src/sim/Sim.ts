@@ -23,6 +23,20 @@ const BUILDING_SLOW = 0.45
 const SEPARATION_STRENGTH = 0.5
 /** How far an enemy will look for something of the Fellowship's to fight. */
 const ENEMY_AGGRO = 1.35
+/**
+ * How long an enemy will keep fighting the same Construct before giving up on
+ * it and resuming its route to the Eldree.
+ *
+ * Without this, an enemy that locks onto a weaponless wall (a Palisade has no
+ * way to fight back) commits to killing it no matter how long that takes —
+ * tens of seconds against a lone Orc — instead of routing around the way the
+ * flow field's path-cost design intends. The wall still slows the horde
+ * (the enemy loses this much time per attempt, and can come back for more),
+ * it just can't freeze a whole wave on one stray attacker.
+ */
+const ENEMY_CONSTRUCT_ENGAGE_LIMIT = 5
+/** How long a given-up-on Construct stays off an enemy's target list afterward. */
+const ENEMY_CONSTRUCT_AVOID_S = 4
 /** Collision body of a Construct. Under the tile radius so units can form up around it. */
 const CONSTRUCT_RADIUS = 0.45
 /** Projectile flight speed, world units per second. */
@@ -493,13 +507,26 @@ export class Sim {
 
     for (let id = 0; id < w.capacity; id++) {
       if (!w.alive[id] || w.team[id] !== Team.Shadow) continue
+      if (w.avoidTimer[id]! > 0) w.avoidTimer[id] = Math.max(0, w.avoidTimer[id]! - dt)
 
       const def = ENEMIES[w.archetype[id] as EnemyKind]
       const x = w.posX[id]!
       const z = w.posZ[id]!
 
-      // Something of the Fellowship's is in reach: stop and fight it.
-      const target = w.targetId[id]!
+      // Something of the Fellowship's is in reach: stop and fight it — unless
+      // it's a Construct we've been grinding on too long, in which case give
+      // up and fall through to routing below, same as having no target at all.
+      let target = w.targetId[id]!
+      if (w.isAlive(target) && w.category[target] === Category.Construct) {
+        w.engageTimer[id] = w.engageTimer[id]! + dt
+        if (w.engageTimer[id]! > ENEMY_CONSTRUCT_ENGAGE_LIMIT) {
+          w.avoidId[id] = target
+          w.avoidTimer[id] = ENEMY_CONSTRUCT_AVOID_S
+          w.engageTimer[id] = 0
+          w.targetId[id] = -1
+          target = -1
+        }
+      }
       if (w.isAlive(target)) {
         const dx = w.posX[target]! - x
         const dz = w.posZ[target]! - z

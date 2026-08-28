@@ -1103,3 +1103,248 @@ still merges for free with the garrison carried across; dragging a Construct
 onto an empty tile still moves it for free; dragging a Construct onto the
 recycle zone sells it for the standard 60% refund and the zone visibly arms
 on hover; a plain tap still shows the read-only info card with no buttons.
+
+---
+
+## Appendix T — a third merge tier for every spawner family
+
+Requested directly: merging should go further than tier 2. Each of the four
+spawner families gained a tier-3 Construct — Warhost Bastion, Stormwatch
+Spire, Highguard Citadel, Eldree Sanctum — reached the same way tier 2 is,
+by merging a matching pair of tier-2s.
+
+**Nothing about the merge mechanism itself changed.** `Placement`,
+`BuildingRegistry.merge`, and `MergeHighlight` all key off a Construct's own
+`upgradesTo`, not off a hardcoded notion of "two tiers" — Appendix O's
+garrison-carrying fix and Appendix N's ghost preview both already generalize
+to any chain depth. Adding a third tier was purely data: a new `BuildingDef`
+per family with `tier: 3` and no `upgradesTo` of its own, plus the matching
+tier-2 gaining an `upgradesTo` pointing at it, and a new procedural mesh per
+type (`BuildingShapes.ts`) escalating the same visual language its tier-2
+already used (an extra roof, an extra tower, an extra orbiting gem).
+
+**Tier-3 stays out of the shop draft pool on purpose.** `BUILDING_ORDER`
+lists tier 1 and tier 2 only; tier-3 `BuildingId`s still need an entry in
+`BUILDING_RARITY` (it types as `Record<BuildingId, Rarity>`, exhaustive over
+every id) but are never drawn. The top of a family is something earned by
+merging, not a fourth card that could show up in a draft.
+
+**`TIER_SCALING` needed a third entry** (`3: 1.9`, alongside the existing
+`1: 1` and `2: 1.45`) — the unit-stat multiplier `Sim.spawnUnit` applies is
+keyed by tier and would otherwise have silently fallen back to `?? 1` (no
+scaling at all) for tier-3 spawns.
+
+Verified via `tsc --noEmit && vite build` (the exhaustive `Record`s over
+`BuildingId` catch a missing entry at compile time, not just at runtime) and
+a manual pass in the browser: merging two War Lodges/Bowspires/Bastion
+Keeps/Arcane Obelisks each produce their tier-3 form with the combined
+garrison carried across, same as any other merge.
+
+---
+
+## Appendix U — random merge results, tried and reverted
+
+Requested and built: instead of a merge always producing the same family's
+next tier, the result would be drawn at random (equal odds) from every
+spawner at that tier — two Barracks might raise a War Lodge again, or just
+as easily a Bowspire. Drew from a seeded `Rng` (the same pattern `Shop`'s
+draft and `Sim`'s enemy spawns already use) rather than `Math.random()`, so
+the roll stays reproducible from the run seed. The ghost preview during a
+merge drag stopped showing the *resulting* shape — impossible to know ahead
+of a random roll — and just tinted the dragged Construct violet instead,
+with the actual result announced in the toast on commit.
+
+**Reverted after a playtest**, on direct feedback: the game already has
+wave composition, shop draft, and enemy spawn timing all drawing from RNG,
+and adding a coin-flip to merging — a mechanic players build around and
+plan ahead for — was one random layer too many. `git revert` cleanly
+undid the single commit (data, `Placement`, and `GhostView` changes only;
+nothing else had been built on top of it yet), restoring the deterministic
+own-family upgrade from Appendix J/T. The tier-3 content from Appendix T
+was unaffected either way, since the random-result *mechanism* was layered
+on top of the existing deterministic `upgradesTo` chains, not a replacement
+for them.
+
+Worth keeping on record: if random merge results come back later (a
+separate game mode, say), the seeded-`Rng`-per-candidate-pool approach is
+already built and known to work — reverting was a design call, not a
+technical dead end.
+
+---
+
+## Appendix V — the four defensive structures get the same merge chain
+
+Requested directly, after asking why some buildings couldn't merge at all:
+Palisade, Ballista Turret, Rune Ward, and Healing Shrine had no `upgradesTo`
+since Appendix J — "the defensive structures have no tier-2 counterpart
+yet" was a deliberate scope cut at the time, not a limitation of the merge
+system. Closed that gap so every one of the 8 families (4 spawners, 4
+defensive) now chains tier 1 → 2 → 3 the same way:
+
+| Family | Tier 2 | Tier 3 |
+|---|---|---|
+| Palisade | Reinforced Palisade | Stoneguard Wall |
+| Ballista Turret | Heavy Ballista | Siege Ballista |
+| Rune Ward | Rune Pillar | Rune Nexus |
+| Healing Shrine | Blessed Shrine | Eternal Wellspring |
+
+Costs and HP scale by roughly the same ratios the spawner tiers already
+established (~2–2.2× cost per tier); Ballista/Rune Ward's weapon stats
+scale similarly tier-over-tier. Tier-2 defensive cards join the shop draft
+pool at Rare, matching how tier-2 spawners are already directly purchasable
+— tier-3 stays merge-only for all 8 families alike (Appendix T's rule,
+just no longer spawner-only).
+
+**One pre-existing gap surfaced, not introduced, by this change.**
+Healing Shrine's blurb ("Mends nearby units between clashes") was already
+unimplemented — nothing outside `buildings.ts`/`BuildingShapes.ts`/the shop
+rarity map ever reads `healing-shrine`, confirmed by grep across `src/`.
+Blessed Shrine and Eternal Wellspring inherit the same gap: both are fully
+mergeable and functional as HP-only Constructs, but neither actually heals
+anyone yet. Flagged rather than silently carried forward, since "the shrine
+line now has three tiers" could otherwise read as three tiers of a working
+feature.
+
+Verified via `tsc --noEmit && vite build` and a manual pass: merging two of
+any defensive tier-1 (or tier-2) now produces its upgrade exactly like a
+spawner merge does.
+
+---
+
+## Appendix W — pickup hold delay cut from 380ms to 180ms
+
+Playtest feedback: picking up a Construct to move/merge/sell (the
+`LONG_PRESS_MS` hold from Appendix P) felt slow to trigger. Cut the constant
+from 380 to 180 — purely a timing number, the pan-vs-pickup disambiguation
+logic Appendix P built is unchanged.
+
+**The trade-off is real, not just tuned away.** That delay exists
+specifically to tell a deliberate pickup apart from a quick tap-to-inspect
+or a pan gesture starting on a built tile (Appendix P). Halving it makes an
+accidental pickup more likely on an ordinary tap that lingers slightly. Left
+as a number worth revisiting if that trade-off starts showing up in
+playtesting, rather than tuned defensively upfront against a problem not
+yet observed.
+
+---
+
+## Appendix X — garrisons now reset every wave, and only muster while a wave runs
+
+Two related requests, the second one exposing a bug in the first.
+
+**Request 1: units spawned by a building should be removed after each
+wave.** Previously a garrison persisted across waves — a Warrior that
+survived one fight walked straight into the next. Added
+`Sim.releaseAllGarrisons()`, called from `checkWaveEnd()` the moment a wave
+clears: kills every `Category.Unit` entity and zeroes every Construct's
+`slotMask` (roster occupancy) in one pass, leaving the Constructs themselves
+untouched. Since spawners already muster continuously (that's what drives
+the Appendix L cooldown bars even outside combat), the intent was for the
+board to visibly empty out and refill from zero during the next Prep.
+
+**Bug, reported directly: the wipe wasn't visible.** Root cause — a
+spawner sitting at full roster holds `spawnTimer` at (or below) zero
+indefinitely, since `spawnerStep` only resets it after an actual spawn,
+never after a blocked attempt (`claimSlot` returning -1). `releaseGarrison`
+cleared the roster but left that stale timer in place, so any spawner that
+was full when the wave ended immediately refilled one slot on the very next
+tick — the kill-and-respawn happened within a single ~33ms frame, before
+anything could render. Fix: `releaseAllGarrisons` now also resets
+`spawnTimer` to a fresh full interval per Construct, matching what
+`addConstruct` already does for a newly placed one.
+
+**Request 2: spawner cooldowns should only tick after a wave starts.**
+`spawnerStep` ran unconditionally every tick regardless of `SimPhase`, so a
+garrison (freshly wiped or not) quietly kept mustering during Prep too.
+Gated the call behind `this.phase === SimPhase.Running` in `Sim.update()` —
+a spawner's cooldown bar now sits frozen exactly where it was left through
+the whole Prep period and only starts counting down once combat actually
+begins.
+
+Verified via `tsc --noEmit && vite build` after each change and reasoning
+through the tick order (`spawnerStep` → `waveSpawnStep` → … →
+`checkWaveEnd`, all within one `update()` call) to confirm the wipe and the
+phase gate interact the way the request needs: nothing spawns during Prep,
+and the first post-wipe spawn waits a full interval into the next wave.
+
+---
+
+## Appendix Y — enemies were fighting weaponless walls for entire waves
+
+Reported directly: the game could look stuck when an enemy attacked a
+Palisade, taking far too long. Traced to a real, previously-unnoticed
+interaction between two existing systems, not a new regression.
+
+**Root cause.** Targets are sticky (Appendix F): an enemy that acquires
+*any* Construct within `ENEMY_AGGRO` (1.35 units) stops routing via the
+flow field entirely and commits to fighting it to the death, however long
+that takes — `enemyStep`'s "stop and fight" branch never re-evaluates
+whether going around would be faster. A Palisade has no weapon to fight
+back and, across its Appendix V tiers, 420–850 HP. A lone Orc's effective
+DPS after the flat 100/(100+armor) mitigation every Construct gets (armor
+12) is ~4.87 — killing a base Palisade solo takes roughly **86 seconds** of
+nothing else happening, longer for its upgrades. A stray attacker fixating
+on a wall read exactly like the game had frozen.
+
+**Fix: enemies now give up on a Construct fight after too long.** `World`
+gained three fields — `engageTimer` (seconds held on the current target),
+`avoidId`/`avoidTimer` (a specific Construct an enemy just abandoned, and
+how long it stays off that enemy's target list). `enemyStep` increments
+`engageTimer` while the sticky target is a `Category.Construct`; past
+`ENEMY_CONSTRUCT_ENGAGE_LIMIT` (5s) it clears the target, sets `avoidId` to
+that Construct with `avoidTimer = ENEMY_CONSTRUCT_AVOID_S` (4s), and falls
+through to ordinary flow-field movement the same tick — instead of one more
+frozen frame. `Targeting.acquire()` gained an `avoidId` parameter so the
+next re-acquisition skips the just-abandoned Construct specifically, rather
+than instantly re-locking onto the same nearest target the moment it's
+cleared. Only fires for `Team.Shadow` entities against `Category.Construct`
+targets; player units' own sticky targeting (Appendix F) is untouched.
+
+**Why this doesn't undermine "a wall slows the horde but can never seal the
+board" (Appendix E).** A Palisade genuinely blocking the only route will
+still get walked back into repeatedly — the enemy just spends its 5s,
+disengages for 4s (during which the flow field can route it around if a
+path exists, since Constructs raise path cost rather than blocking), and
+tries again if it's still the nearest thing in reach. The wall still costs
+the horde real time per attempt; it just can't freeze an entire wave on one
+stray attacker anymore.
+
+The 5s/4s constants are a first pass reasoned from the DPS numbers above,
+not empirically tuned against playtesting the way earlier appendices'
+verified numbers were — worth revisiting if disengage/re-engage cycling
+reads as twitchy, or if walls still feel too sticky, once played more.
+Verified via `tsc --noEmit && vite build` and tracing the tick order by
+hand; not yet re-verified with the sim-driving harness earlier milestones
+used.
+
+---
+
+## Appendix Z — two follow-up polish requests
+
+**The Eldree now grows as the board expands.** Requested directly: the
+Sacred Tree should read as bigger once a ring unlock (Appendix C) makes the
+board bigger. `Eldree.growForRing(ring)` sets a target scale — `0.98` (the
+existing base, ring 2, where the board starts) plus `0.22` per ring beyond
+that, so `1.20` at the wave-4 ring-3 unlock and `1.42` at the wave-8 ring-4
+unlock — and `Eldree.update()` eases toward it every frame with the same
+frame-rate-independent exponential ease `CameraRig.tick()` already uses for
+its own pull-back, both driven from the same `expandBoard()` call so the
+tree growing and the camera reframing read as one animation rather than two
+uncoordinated ones. A run restart's `expandBoard(false)` snaps the scale
+straight back to base instead of easing down, matching how the camera fit
+already snaps on that path.
+
+**The Reroll button no longer looks permanently disabled.** Reported
+directly. Its *enabled* style already used `--ink-dim` text on a
+near-invisible background — the same look every other disabled control in
+`styles.css` uses for its actual disabled state — so `:disabled` only
+dropping opacity a further 0.4 was barely perceptible against that already-
+muted baseline; affordable and unaffordable read as almost the same button.
+Restyled to match the Ready button's own convention instead: gold-tinted
+border/background/text while affordable, the dim/muted look reserved for
+`:disabled`, plus a press state on tap. No behavior changed, only which
+visual state maps to which condition.
+
+Both verified via `tsc --noEmit && vite build`; visual confirmation left to
+manual playtesting rather than an automated check, since both are purely
+presentational.

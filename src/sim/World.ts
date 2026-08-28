@@ -77,6 +77,11 @@ export class World {
   readonly stationX = new Float32Array(MAX_ENTITIES)
   readonly stationZ = new Float32Array(MAX_ENTITIES)
   readonly targetId = new Int16Array(MAX_ENTITIES)
+  /** Seconds the current target has been held against a Construct, enemies only. */
+  readonly engageTimer = new Float32Array(MAX_ENTITIES)
+  /** Construct id an enemy just gave up on, so it doesn't instantly re-lock onto it. */
+  readonly avoidId = new Int16Array(MAX_ENTITIES)
+  readonly avoidTimer = new Float32Array(MAX_ENTITIES)
   /** Construct that produced this unit, or -1. */
   readonly ownerId = new Int16Array(MAX_ENTITIES)
   /** Which formation slot of its owner this unit holds. */
@@ -118,6 +123,9 @@ export class World {
     this.flags[id] = 0
     this.slotMask[id] = 0
     this.spawnTimer[id] = 0
+    this.engageTimer[id] = 0
+    this.avoidId[id] = -1
+    this.avoidTimer[id] = 0
     return id
   }
 
