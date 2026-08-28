@@ -40,6 +40,8 @@ export function acquire(
   honourTaunt: boolean,
   /** Ordinary targets must be inside this; taunters may pull from `searchRadius`. */
   engageRadius = searchRadius,
+  /** Skipped entirely — an enemy that just gave up on this Construct, still on cooldown. */
+  avoidId = -1,
 ): number {
   const myTeam = world.team[id]!
   const found = spatial.query(originX, originZ, searchRadius, scratch)
@@ -51,7 +53,7 @@ export function acquire(
 
   for (let i = 0; i < found; i++) {
     const other = scratch[i]!
-    if (other === id || !world.alive[other]) continue
+    if (other === id || other === avoidId || !world.alive[other]) continue
     if (world.team[other] === myTeam) continue
 
     const dx = world.posX[other]! - originX
@@ -128,6 +130,11 @@ export function targetingSystem(
     // Enemies sweep out to taunt range so a Knight can pull them, but only
     // commit to ordinary targets already inside their own engagement radius.
     const search = isEnemy ? Math.max(reach, TAUNT_RADIUS) : reach
-    world.targetId[id] = acquire(world, spatial, id, searchX, searchZ, search, scratch, isEnemy, reach)
+    const avoidId = isEnemy && world.avoidTimer[id]! > 0 ? world.avoidId[id]! : -1
+    const next = acquire(world, spatial, id, searchX, searchZ, search, scratch, isEnemy, reach, avoidId)
+    // A fresh target starts its engagement clock over — see enemyStep's
+    // Construct-engagement timeout, which reads this for enemies only.
+    if (next !== current) world.engageTimer[id] = 0
+    world.targetId[id] = next
   }
 }
