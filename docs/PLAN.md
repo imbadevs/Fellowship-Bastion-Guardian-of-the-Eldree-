@@ -1683,3 +1683,133 @@ tier-1 requirement went 26 tiles to 34, and wave 25's went 34 to 45 while
 the buildings lost holding it rose from 8 to 14. Tier-3 moved barely at all
 (5 tiles to 6), so the answer to a harder horde is still to upgrade rather
 than to buy more.
+
+---
+
+## Appendix AG — the counter system, made real and made legible
+
+Requested: strengthen the counter system. Two things were wrong with it —
+one a bug, one a contradiction between what the game says and what it does.
+
+**The bug: merging broke the only magic line in the game.** `addConstruct`
+read `def.id === 'rune-ward' ? Magic : Physical`, a check on the tier-1 id.
+So a Rune Pillar and a Rune Nexus — the upgrades a player spends four
+purchases and two merges to reach — silently dealt *physical* damage. The
+counter identity collapsed exactly when the player committed to it, and
+nothing surfaced the change. Damage type is now a field on `BuildingDef`,
+so the whole family carries it; verified all three rune tiers read Magic and
+the ballista tiers read Physical.
+
+**The contradiction: the blurbs were inverted.** The Ballista said
+"Punishes armoured Trolls" while dealing physical into armour 45 — its
+*worst* matchup. The Rune Ward said "Wraiths cannot ignore it" while dealing
+magic into 60% resistance — also its worst. `Combat.ts` and the README had
+it right the whole time (armour → magic answers it, resistance → physical
+answers it); the flavour text, and the GDD table written from it, had it
+backwards. Fixed in favour of the mechanics, which are the load-bearing
+half and the genre convention: magic bypasses plate, arrows still bite a
+ghost that shrugs off spells.
+
+**Sharpened, because 1.45x is not a counter.** Troll armour 45 → 110 and
+Wraith resistance 0.6 → 0.72:
+
+| | physical | magic | edge |
+|---|---|---|---|
+| Orc | 1.00 | 1.00 | neutral |
+| Troll | 0.48 | 1.00 | magic x2.10 |
+| Wraith | 1.00 | 0.28 | physical x3.57 |
+
+**The Rune line could not apply its own advantage.** Even at 2.1x into
+Trolls it lost to the Ballista in practice, because it had both lower dps
+and *2.0 range against the Ballista's 3.5* — it barely got to fire before
+the fight reached it. Reach was the real problem, so the line went to
+2.8 / 3.2 / 3.5 (still inside the Ballista's 3.5 / 4.1 / 4.7) with a small
+damage bump. Effective dps now favours Rune into Trolls by ~1.8x at every
+tier and Ballista into Wraiths by ~4x.
+
+Measured with single-enemy waves against eight of one Construct:
+
+| defence | vs Trolls x12 | vs Wraiths x20 |
+|---|---|---|
+| Ballista (physical) | 4 killed | **16 killed** |
+| Rune Ward (magic) | **8 killed** | 1 killed |
+| Archery (physical) | 1 | 11 |
+| Mage Spire (magic) | 1 | 0 |
+
+Bringing the wrong damage type into Wraiths costs 15 of 16 kills. That is a
+counter system; what was there before was a rounding error.
+
+The point of all of it, measured on the same 20 tiles at wave 15: a board
+carrying **both** damage types held 128/128, a physical-only board lost at
+80/128, and a magic-only board lost at 55/128. Same tile count, same gold
+class, different answer — coverage now beats size. Wave 10 still holds for
+all three, so the early game teaches the lesson without enforcing it yet.
+
+**Follow-up: muster cadence cut ~18%.** With the difficulty raised across
+Appendices AD–AG, spawner cooldowns came down at every tier (Barracks
+6s → 4.9s, Warhost 3.5s → 2.9s, Knight's Hall 10s → 8.2s, and so on for all
+twelve). This is worth more than it looks because garrisons reset between
+waves and only muster while one runs (Appendix X): muster time is dead time
+at the *front of every fight*, and a Warhost Bastion took 24.5s to reach
+full strength where it now takes 20.3s.
+
+Cut to a third first, which played too fast — a board came online almost
+before the horde arrived, which flattened the opening of every wave into a
+formality. Halved the cut back to ~18%, which keeps the ramp legible as a
+real pressure while still rewarding the player for having built early.
+
+Worth being precise about what it changed, because it is not what one might
+expect. The minimum tiles needed to hold a wave barely moved — that number
+is set by steady-state roster dps, which the roster cap fixes regardless of
+how fast the slots refill. What dropped was **attrition**: buildings lost
+while holding wave 25 on tier-1 Constructs went 14 to 7, and wave 15 went
+4 to 3. Faster refills mean a Construct that loses its garrison gets it
+back before the next foe arrives, so the defence sustains itself rather than
+being chewed down. If the tile requirement itself needs to come down, roster
+size or unit stats are the levers, not cadence.
+
+---
+
+## Appendix AH — the Healing Shrine finally does something
+
+The Shrine line had been shipping as decoration since Appendix V flagged it:
+three tiers that cost gold, merged correctly, and carried blurbs promising to
+mend the garrison, with nothing anywhere in `src/` reading them. It was an
+HP-only Construct wearing a support tower's clothes.
+
+**Units, not Constructs.** The blurbs promise a garrison's keeping, and that
+is also the right call for balance: letting a shrine repair buildings would
+quietly undo the siege pressure Appendix AF exists to create, turning a wall
+into something you never have to replace. Enemies are excluded for the
+obvious reason, and both exclusions are tested rather than assumed.
+
+**Continuous, not cooldown-driven.** There is no shot to time, so a shrine
+shows no cooldown ring — which is why the ring view already skipped it.
+
+**Dedicated `healRate` / `healRange` fields on `World`.** Reusing `damage`
+and `range` would have been tempting and wrong: those are exactly what mark
+an entity as a turret, so a shrine borrowing them would start acquiring
+targets and firing at the horde.
+
+Rates follow the same rule every other family does — a tier beats the sum of
+what merged into it: 8 hp/s at tier 1, 18 at tier 2 (over 2x), 38 at tier 3
+(over 4x), across auras of 2.4 / 2.9 / 3.4 hex steps. `healStep` runs *after*
+`deathStep`, so a unit already reduced to nothing stays dead instead of being
+pulled back by healing that landed in the same frame.
+
+Verified by holding the sim in `Running` with an empty spawn queue — spawners
+muster and the aura ticks, but no enemy exists to confound the reading. Three
+Warriors wounded to 24/95, measured over three seconds:
+
+| | after 3s |
+|---|---|
+| no shrine (control) | 24 (flat) |
+| Healing Shrine, 8/s | 48 |
+| Blessed Shrine, 18/s | 78 |
+| Eternal Wellspring, 38/s | 95 (capped at max) |
+
+Every rate lands exactly on its number, and healing stops at `maxHp`. The
+boundaries hold too: on a full board a garrison 1.73 units from a shrine
+healed while one at 7.94 (aura radius 4.16) did not, a Construct inside the
+aura was untouched, and an enemy standing directly on the shrine was never
+healed.

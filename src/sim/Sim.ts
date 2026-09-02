@@ -164,7 +164,10 @@ export class Sim {
     w.range[id] = weapon ? weapon.range * this.grid.layout.tileWidth : 0
     w.attackInterval[id] = weapon?.cooldown ?? 0
     w.splash[id] = weapon?.splash ?? 0
-    w.damageType[id] = def.id === 'rune-ward' ? DamageType.Magic : DamageType.Physical
+    w.damageType[id] = def.damageType ?? DamageType.Physical
+
+    w.healRate[id] = def.heal?.rate ?? 0
+    w.healRange[id] = def.heal ? def.heal.range * this.grid.layout.tileWidth : 0
 
     w.rosterCap[id] = def.spawn?.roster ?? 0
     // The first unit waits a full interval too, same as every one after it —
@@ -343,6 +346,7 @@ export class Sim {
     this.attackStep(dt)
     this.projectiles.update(dt, this.world, (p, target) => this.resolveHit(p, target))
     this.deathStep()
+    if (this.phase === SimPhase.Running) this.healStep(dt)
 
     if (this.phase === SimPhase.Running) {
       this.elapsed += dt
@@ -638,6 +642,37 @@ export class Sim {
   }
 
   // --- combat ---------------------------------------------------------------
+
+  /**
+   * Shrines mend the garrison standing around them.
+   *
+   * Continuous rather than cooldown-driven — there is no shot to time, which
+   * is also why a shrine shows no cooldown ring. Runs *after* `deathStep`, so
+   * a unit already reduced to nothing stays dead rather than being pulled back
+   * by a tick of healing that arrived in the same frame.
+   *
+   * Units only, never Constructs: the shrine blurbs promise a garrison's
+   * keeping, and letting a shrine repair buildings would quietly undo the
+   * siege pressure that makes losing a wall mean something.
+   */
+  private healStep(dt: number): void {
+    const w = this.world
+    for (let id = 0; id < w.capacity; id++) {
+      if (!w.alive[id] || w.category[id] !== Category.Construct) continue
+      const rate = w.healRate[id]!
+      if (rate <= 0) continue
+
+      const amount = rate * dt
+      const found = this.spatial.query(w.posX[id]!, w.posZ[id]!, w.healRange[id]!, this.scratch)
+      for (let i = 0; i < found; i++) {
+        const other = this.scratch[i]!
+        if (w.category[other] !== Category.Unit || w.team[other] !== Team.Player) continue
+        const max = w.maxHp[other]!
+        if (w.hp[other]! >= max) continue
+        w.hp[other] = Math.min(max, w.hp[other]! + amount)
+      }
+    }
+  }
 
   private attackStep(dt: number): void {
     const w = this.world

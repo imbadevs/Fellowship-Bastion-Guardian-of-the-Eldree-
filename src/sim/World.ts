@@ -102,6 +102,13 @@ export class World {
   // Spawner bookkeeping, indexed by the construct's own entity id.
   /** Bitmask of formation slots currently filled. */
   readonly slotMask = new Uint8Array(MAX_ENTITIES)
+  /**
+   * Shrine aura, on Constructs only. Deliberately not reusing `damage`/`range`:
+   * those are what mark an entity as a turret, so a shrine borrowing them would
+   * start acquiring targets and shooting.
+   */
+  readonly healRate = new Float32Array(MAX_ENTITIES)
+  readonly healRange = new Float32Array(MAX_ENTITIES)
   readonly rosterCap = new Uint8Array(MAX_ENTITIES)
   readonly spawnTimer = new Float32Array(MAX_ENTITIES)
 
@@ -135,6 +142,8 @@ export class World {
     this.flags[id] = 0
     this.slotMask[id] = 0
     this.spawnTimer[id] = 0
+    this.healRate[id] = 0
+    this.healRange[id] = 0
     this.engageTimer[id] = 0
     this.avoidId[id] = -1
     this.avoidTimer[id] = 0

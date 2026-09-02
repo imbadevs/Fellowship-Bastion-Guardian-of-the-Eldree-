@@ -1,3 +1,5 @@
+import { DamageType } from '../sim/World'
+
 /**
  * Construct definitions.
  *
@@ -56,6 +58,21 @@ export interface SpawnProfile {
   readonly interval: number
 }
 
+/**
+ * A shrine's mending aura.
+ *
+ * Continuous rather than on a cooldown, so there is no shot to time and no
+ * cooldown ring to show. Rates follow the same rule every other family does:
+ * a tier has to beat the sum of what merged into it, so tier 2 clears 2x the
+ * tier-1 rate and tier 3 clears 4x.
+ */
+export interface HealProfile {
+  /** Hit points restored per second, shared across everyone in range. */
+  readonly rate: number
+  /** Radius in hex steps, like `WeaponProfile.range`. */
+  readonly range: number
+}
+
 /** Consumed by CombatSystem in M4. */
 export interface WeaponProfile {
   readonly damage: number
@@ -78,6 +95,16 @@ export interface BuildingDef {
   readonly hp: number
   readonly spawn?: SpawnProfile
   readonly weapon?: WeaponProfile
+  readonly heal?: HealProfile
+  /**
+   * What its weapon deals, if it has one. Defaults to physical.
+   *
+   * Data rather than a check on the id: this used to read
+   * `def.id === 'rune-ward'`, so merging a Rune Ward into its own upgrades
+   * silently turned the game's only magic line physical — the counter
+   * identity broke exactly when the player invested in it.
+   */
+  readonly damageType?: DamageType
   /**
    * The higher-tier Construct two of this one merge into, if any.
    *
@@ -100,7 +127,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     tier: 1,
     cost: 60,
     glyph: 'WAR',
-    spawn: { unitClass: UnitClass.Warrior, roster: 3, interval: 6 },
+    spawn: { unitClass: UnitClass.Warrior, roster: 3, interval: 4.9 },
     upgradesTo: 'warlodge',
   },
   warlodge: {
@@ -112,7 +139,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     tier: 2,
     cost: 150,
     glyph: 'WAR II',
-    spawn: { unitClass: UnitClass.Warrior, roster: 5, interval: 4.5 },
+    spawn: { unitClass: UnitClass.Warrior, roster: 5, interval: 3.7 },
     upgradesTo: 'warhost',
   },
   warhost: {
@@ -124,7 +151,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     tier: 3,
     cost: 340,
     glyph: 'WAR III',
-    spawn: { unitClass: UnitClass.Warrior, roster: 7, interval: 3.5 },
+    spawn: { unitClass: UnitClass.Warrior, roster: 7, interval: 2.9 },
   },
   'archery-range': {
     id: 'archery-range',
@@ -135,7 +162,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     tier: 1,
     cost: 75,
     glyph: 'ARC',
-    spawn: { unitClass: UnitClass.Archer, roster: 2, interval: 7 },
+    spawn: { unitClass: UnitClass.Archer, roster: 2, interval: 5.7 },
     upgradesTo: 'bowspire',
   },
   bowspire: {
@@ -147,7 +174,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     tier: 2,
     cost: 170,
     glyph: 'ARC II',
-    spawn: { unitClass: UnitClass.Archer, roster: 3, interval: 5.5 },
+    spawn: { unitClass: UnitClass.Archer, roster: 3, interval: 4.5 },
     upgradesTo: 'stormwatch-spire',
   },
   'stormwatch-spire': {
@@ -159,7 +186,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     tier: 3,
     cost: 380,
     glyph: 'ARC III',
-    spawn: { unitClass: UnitClass.Archer, roster: 4, interval: 4.3 },
+    spawn: { unitClass: UnitClass.Archer, roster: 4, interval: 3.5 },
   },
   'knights-hall': {
     id: 'knights-hall',
@@ -170,7 +197,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     tier: 1,
     cost: 110,
     glyph: 'KNT',
-    spawn: { unitClass: UnitClass.Knight, roster: 1, interval: 10 },
+    spawn: { unitClass: UnitClass.Knight, roster: 1, interval: 8.2 },
     upgradesTo: 'bastion-keep',
   },
   'bastion-keep': {
@@ -182,7 +209,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     tier: 2,
     cost: 230,
     glyph: 'KNT II',
-    spawn: { unitClass: UnitClass.Knight, roster: 2, interval: 8 },
+    spawn: { unitClass: UnitClass.Knight, roster: 2, interval: 6.5 },
     upgradesTo: 'highguard-citadel',
   },
   'highguard-citadel': {
@@ -194,7 +221,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     tier: 3,
     cost: 460,
     glyph: 'KNT III',
-    spawn: { unitClass: UnitClass.Knight, roster: 3, interval: 6.5 },
+    spawn: { unitClass: UnitClass.Knight, roster: 3, interval: 5.3 },
   },
   'mage-spire': {
     id: 'mage-spire',
@@ -205,7 +232,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     tier: 1,
     cost: 130,
     glyph: 'MAG',
-    spawn: { unitClass: UnitClass.Mage, roster: 1, interval: 9 },
+    spawn: { unitClass: UnitClass.Mage, roster: 1, interval: 7.4 },
     upgradesTo: 'arcane-obelisk',
   },
   'arcane-obelisk': {
@@ -217,7 +244,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     tier: 2,
     cost: 260,
     glyph: 'MAG II',
-    spawn: { unitClass: UnitClass.Mage, roster: 2, interval: 7.5 },
+    spawn: { unitClass: UnitClass.Mage, roster: 2, interval: 6.1 },
     upgradesTo: 'eldree-sanctum',
   },
   'eldree-sanctum': {
@@ -229,7 +256,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     tier: 3,
     cost: 480,
     glyph: 'MAG III',
-    spawn: { unitClass: UnitClass.Mage, roster: 3, interval: 6.2 },
+    spawn: { unitClass: UnitClass.Mage, roster: 3, interval: 5.1 },
   },
   palisade: {
     id: 'palisade',
@@ -267,7 +294,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     id: 'ballista',
     hp: 240,
     name: 'Ballista Turret',
-    blurb: 'Heavy bolts. Punishes armoured Trolls.',
+    blurb: 'Heavy bolts. Tears through Wraiths that shrug off magic.',
     category: BuildingCategory.Defense,
     tier: 1,
     cost: 95,
@@ -291,7 +318,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     id: 'siege-ballista',
     hp: 1150,
     name: 'Siege Ballista',
-    blurb: 'Siege-grade bolts that shatter armour outright.',
+    blurb: 'Siege-grade bolts. Nothing unarmoured survives the volley.',
     category: BuildingCategory.Defense,
     tier: 3,
     cost: 440,
@@ -302,25 +329,27 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     id: 'rune-ward',
     hp: 200,
     name: 'Rune Ward',
-    blurb: 'Arcane pulse. Wraiths cannot ignore it.',
+    blurb: 'Arcane pulse. Ignores the armour Trolls hide behind.',
     category: BuildingCategory.Defense,
     tier: 1,
     cost: 120,
     glyph: 'RUNE',
-    weapon: { damage: 14, range: 2, cooldown: 1.1, splash: 1.2 },
+    weapon: { damage: 18, range: 2.8, cooldown: 1.05, splash: 1.2 },
     upgradesTo: 'rune-pillar',
+    damageType: DamageType.Magic,
   },
   'rune-pillar': {
     id: 'rune-pillar',
     hp: 480,
     name: 'Rune Pillar',
-    blurb: 'A taller conduit, wider pulse, Wraiths cannot dodge.',
+    blurb: 'A taller conduit, wider pulse, no armour worth the name.',
     category: BuildingCategory.Defense,
     tier: 2,
     cost: 260,
     glyph: 'RUNE II',
-    weapon: { damage: 27, range: 2.35, cooldown: 0.95, splash: 1.45 },
+    weapon: { damage: 34, range: 3.2, cooldown: 0.95, splash: 1.45 },
     upgradesTo: 'rune-nexus',
+    damageType: DamageType.Magic,
   },
   'rune-nexus': {
     id: 'rune-nexus',
@@ -331,7 +360,8 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     tier: 3,
     cost: 540,
     glyph: 'RUNE III',
-    weapon: { damage: 46, range: 2.6, cooldown: 0.8, splash: 1.75 },
+    weapon: { damage: 58, range: 3.5, cooldown: 0.8, splash: 1.75 },
+    damageType: DamageType.Magic,
   },
   'healing-shrine': {
     id: 'healing-shrine',
@@ -343,6 +373,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 140,
     glyph: 'SHRN',
     upgradesTo: 'blessed-shrine',
+    heal: { rate: 8, range: 2.4 },
   },
   'blessed-shrine': {
     id: 'blessed-shrine',
@@ -354,6 +385,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     cost: 300,
     glyph: 'SHRN II',
     upgradesTo: 'eternal-wellspring',
+    heal: { rate: 18, range: 2.9 },
   },
   'eternal-wellspring': {
     id: 'eternal-wellspring',
@@ -364,6 +396,7 @@ export const BUILDINGS: Record<BuildingId, BuildingDef> = {
     tier: 3,
     cost: 620,
     glyph: 'SHRN III',
+    heal: { rate: 38, range: 3.4 },
   },
 }
 

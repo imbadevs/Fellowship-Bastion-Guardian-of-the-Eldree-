@@ -145,7 +145,8 @@ bottomRegion.className = 'region'
 uiRoot.append(topRegion, bottomRegion)
 
 const hud = new Hud(topRegion)
-const debug = new DebugOverlay(topRegion)
+/** Frame/draw-call readout. Dev-only: a submission build ships a game, not a harness. */
+const debug = import.meta.env.DEV ? new DebugOverlay(topRegion) : null
 const toast = new Toast(bottomRegion)
 const inspect = new InspectPanel(bottomRegion)
 
@@ -414,26 +415,31 @@ input.onBuildingDragEnd = (cell, x, y) => {
 
 // --- dev controls -----------------------------------------------------------
 // Testing aids only — the real loop is Ready → Wave → Shop → place → Ready.
+// Gated on `import.meta.env.DEV`, which is statically replaced at build time,
+// so a production build drops the whole block: Smite and "+200 gold" are
+// exactly the buttons a player must never be handed.
 
-function devButton(label: string, onClick: (button: HTMLButtonElement) => void): void {
-  const button = document.createElement('button')
-  button.textContent = label
-  button.addEventListener('click', () => onClick(button))
-  devBar.append(button)
+if (import.meta.env.DEV) {
+  const devButton = (label: string, onClick: (button: HTMLButtonElement) => void): void => {
+    const button = document.createElement('button')
+    button.textContent = label
+    button.addEventListener('click', () => onClick(button))
+    devBar.append(button)
+  }
+
+  devButton('Smite', () => sim.smiteAll())
+  devButton('+200', () => economy.grant(200))
+  devButton('Frame', () => rig.reset())
+  devButton('Reset', restartRun)
+
+  const speeds = [1, 2, 4]
+  let speedIndex = 0
+  devButton('1x', (button) => {
+    speedIndex = (speedIndex + 1) % speeds.length
+    loop.speed = speeds[speedIndex]!
+    button.textContent = `${loop.speed}x`
+  })
 }
-
-devButton('Smite', () => sim.smiteAll())
-devButton('+200', () => economy.grant(200))
-devButton('Frame', () => rig.reset())
-devButton('Reset', restartRun)
-
-const speeds = [1, 2, 4]
-let speedIndex = 0
-devButton('1x', (button) => {
-  speedIndex = (speedIndex + 1) % speeds.length
-  loop.speed = speeds[speedIndex]!
-  button.textContent = `${loop.speed}x`
-})
 
 // --- loop -------------------------------------------------------------------
 
@@ -572,7 +578,7 @@ function render(alpha: number, wallDt: number): void {
   debugSource.buildings = registry.count
   debugSource.enemies = sim.enemyCount
   debugSource.units = sim.world.count - sim.enemyCount - registry.count
-  debug.update(wallDt, debugSource)
+  debug?.update(wallDt, debugSource)
 }
 
 const loop = new Loop(update, render)

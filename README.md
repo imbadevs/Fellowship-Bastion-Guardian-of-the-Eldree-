@@ -243,6 +243,15 @@ happen: the ghost switches to the *upgrade's* silhouette (what you'd
 actually get, not what you're carrying), and, when dragging one Construct
 onto another, a violet beam links the two so the pairing is unambiguous.
 
+**Shrines mend the garrison.** The Healing Shrine line is the only Construct
+that adds no damage at all: it restores health continuously to every friendly
+unit inside its aura (8 / 18 / 38 hp per second across 2.4 / 2.9 / 3.4 hex
+steps as it upgrades). Units only — not buildings, which keeps a wall
+something you have to replace rather than something that repairs itself — and
+never enemies. It is the answer to attrition rather than to any one enemy
+type, which makes it the one defensive family that competes for a tile on
+sustain instead of output.
+
 **Floating indicators** — a Construct carries up to two, stacked above its
 roofline. Both are positioned from a measured, not hand-authored, height
 (`buildingHeight` in `BuildingShapes.ts`), so neither can drift out of sync
@@ -259,7 +268,8 @@ with a shape that gets retuned later.
   in the fragment shader, so the entire board is **one** draw call — cheaper
   than the two the old horizontal bar needed, since track and fill share the
   same pixels. Defensive structures with neither a spawner nor a weapon
-  (Palisade, Healing Shrine) show no ring, since there is no cooldown.
+  (Palisade, Healing Shrine) show no ring — a wall has no timer, and a
+  shrine's mending is continuous rather than something that fires.
 
 The slots are fixed, so a Construct taking its first hit does not shove its
 ring upward mid-fight; a healthy one simply leaves the lower slot empty.

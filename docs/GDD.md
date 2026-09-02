@@ -62,8 +62,8 @@ than a convenience.
 | Enemy | Role | Notes |
 |---|---|---|
 | **Orc** | Cheap, common | Baseline threat, no armour or resist |
-| **Troll** | Armoured bruiser, wall-breaker | Heavy physical mitigation — a Ballista problem. Hits Constructs 4.5x harder than flesh, so an unanswered Troll eats your line |
-| **Wraith** | Flier | Ignores the routing field, drifts straight at the Eldree, high magic resist — a Rune Ward problem |
+| **Troll** | Armoured bruiser, wall-breaker | Armour 110 halves physical damage, but it has no magic resistance at all — **a magic problem** (Rune line, Mages). Hits Constructs 4.5x harder than flesh, so an unanswered Troll eats your line |
+| **Wraith** | Flier | Ignores the routing field and drifts straight at the Eldree, so a purely outward defence never touches it. Shrugs off 72% of magic but has no armour — **a physical problem** (Ballista line, Archers) |
 
 Every enemy that reaches a Construct or the Eldree fights it in melee, and
 hits buildings harder than it hits flesh (Orc 2.5x, Troll 4.5x, Wraith
@@ -71,6 +71,20 @@ hits buildings harder than it hits flesh (Orc 2.5x, Troll 4.5x, Wraith
 Killing one grants gold. An enemy that fixates on a single Construct for too
 long (5s) gives up and reroutes rather than grinding forever — so a wall
 slows the horde, it never traps an attacker in place indefinitely either.
+
+**The counter system is the whole reason to read that table.** Damage comes
+in two kinds and each enemy is soft to exactly one of them:
+
+| | physical | magic |
+|---|---|---|
+| Orc | 1.00 | 1.00 |
+| Troll (armour 110) | 0.48 | **1.00** |
+| Wraith (resist 0.72) | **1.00** | 0.28 |
+
+Magic is ~2.1x better into Trolls, physical ~3.6x better into Wraiths, and
+Orcs care about neither — they are the volume problem, answered by bodies.
+A board of one damage type will always meet the wave it cannot hurt, which
+is what makes the shop draft a decision rather than a shopping list.
 
 ## Constructs
 
@@ -93,14 +107,15 @@ than buy outright.
 | Family | Role |
 |---|---|
 | Palisade → Reinforced Palisade → Stoneguard Wall | Cheap bulk; raises path cost, slows the horde without ever sealing the board |
-| Ballista Turret → Heavy Ballista → Siege Ballista | Heavy single-target bolts — the Troll answer |
-| Rune Ward → Rune Pillar → Rune Nexus | Splash pulse that reaches fliers — the Wraith answer |
-| Healing Shrine → Blessed Shrine → Eternal Wellspring | *Blurb promises mending the garrison; not implemented yet — currently an HP-only Construct* |
+| Ballista Turret → Heavy Ballista → Siege Ballista | Heavy physical bolts, longest reach — the **Wraith** answer |
+| Rune Ward → Rune Pillar → Rune Nexus | Magic splash that ignores armour — the **Troll** answer |
+| Healing Shrine → Blessed Shrine → Eternal Wellspring | Mends every friendly unit in a radius, continuously — the only Construct that keeps a garrison alive rather than adding damage |
 
-Roster size and spawn speed both improve with tier (e.g. Barracks musters 3
-Warriors on a 6s cadence; a Warhost Bastion musters 7 on 3.5s). Garrisons
+Roster size and spawn speed both improve with tier (a Barracks musters 3
+Warriors on a 4.9s cadence; a Warhost Bastion musters 7 on 2.9s). Garrisons
 reset to zero at the end of every wave and only muster once the next wave
-is actually running — Prep is a building phase, not a free mustering phase.
+is actually running — Prep is a building phase, not a free mustering phase,
+which makes muster speed dead time at the front of every fight.
 
 ## Controls
 
