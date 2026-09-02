@@ -2,7 +2,9 @@
 
 Portrait-mode 3D tower defense on a hex grid. three.js + TypeScript + Vite.
 
-See [docs/PLAN.md](docs/PLAN.md) for the full technical plan and milestone breakdown.
+See [docs/GDD.md](docs/GDD.md) for a short design overview (premise, loop,
+Constructs, controls), or [docs/PLAN.md](docs/PLAN.md) for the full technical
+plan and milestone breakdown.
 
 ## Running
 
