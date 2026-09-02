@@ -1453,3 +1453,47 @@ Verified in the browser: the unlock schedule opens 19/37/61/91/127 tiles at
 waves 1/6/11/16/21; a full run through wave 6 with a real defence expands the
 board only after wave 5 clears; and the full 127-tile board still renders in
 **3 draw calls at 120fps**, against the same 60-call budget.
+
+---
+
+## Appendix AC — health bars for Constructs, and the cooldown goes radial
+
+Two requests, one turn: Constructs should show remaining HP, visible only
+below full health; and the cooldown indicator should become a circle.
+
+**The health bar is deliberately conditional.** A bar on every Construct at
+all times is noise on a board that can hold 126 of them — so its *presence*
+is the signal. `syncBars` skips any Construct at `hp >= maxHp`, which means a
+healthy board shows nothing at all and a single damaged wall is immediately
+findable. The fill is tinted per instance (green above 60%, amber above 30%,
+red below), so severity reads without counting pixels; `BarView` only
+allocates the `instanceColor` buffer when a caller opts in, so the cooldown
+side never paid for it.
+
+**`CooldownBarView` became the generic `BarView`.** With two bar kinds
+differing only in colour and what fills them, keeping a cooldown-specific
+class would have meant duplicating ~80 lines of instancing and camera-facing
+setup. The generic version takes a fill colour and an optional per-instance
+tint.
+
+**The ring is a shader, not geometry.** A radial sweep cannot be expressed as
+per-instance geometry — `RingGeometry`'s `thetaLength` is fixed at build time
+and an `InstancedMesh` shares one geometry across every instance. So
+`CooldownRingView` puts progress on an `InstancedBufferAttribute` and does
+the sweep in the fragment shader: mask an annulus, convert the fragment's
+angle to 0..1 clockwise from the top, and fill everything behind the sweep.
+That makes the whole board **one** draw call — fewer than the two the bar
+needed, since track and fill are the same pixels here. Edge softening uses a
+fixed epsilon rather than `fwidth`, so no derivatives extension is assumed.
+
+**Slot assignment is fixed, not dynamic.** Health takes the slot nearest the
+roofline and the ring stacks above it *always*, so a Construct taking its
+first hit does not shove its ring upward mid-fight. The cost is a small gap
+under the ring on an undamaged Construct, which is the better trade than
+indicators that jump during combat.
+
+Verified in the browser against hand-set values: three damaged Constructs
+(80%/45%/15%) produced fills of 0.80/0.45/0.15 tinted green/amber/red, the
+fourth at full health produced no bar at all, and rings at 25%/75%/100%
+swept correctly — with the Palisade correctly showing a health bar and no
+ring, having neither spawner nor weapon.

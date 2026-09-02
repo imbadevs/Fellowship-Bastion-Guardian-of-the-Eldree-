@@ -2,15 +2,14 @@ import * as THREE from 'three'
 import { PITCH } from './CameraRig'
 
 /** Bar footprint, in world units — narrower than a tile so it reads as an overlay, not a floor tile. */
-const BAR_WIDTH = 0.62
-const BAR_HEIGHT = 0.09
+export const BAR_WIDTH = 0.62
+export const BAR_HEIGHT = 0.09
 /** A sliver stays visible at 0% so the bar reads as "empty", not "absent". */
 const MIN_FILL = 0.03
 
 const TRACK_COLOR = 0x10141a
-const FILL_COLOR = 0xf2c464
 
-export interface CooldownEntry {
+export interface BarEntry {
   readonly worldX: number
   readonly worldZ: number
   /**
@@ -19,20 +18,21 @@ export interface CooldownEntry {
    * which this class has no reason to know about.
    */
   readonly anchorY: number
-  /** 0 = just spawned/fired, 1 = ready. */
+  /** 0 = empty, 1 = full. */
   readonly progress: number
+  /** Overrides the view's fill colour for this bar only. */
+  readonly color?: number
 }
 
 /**
- * A charge-up bar floating above every Construct with a cooldown — spawn
- * timer for spawners, attack cooldown for turrets. Structures with neither
- * (Palisade, Healing Shrine) simply never appear in the synced list.
+ * A floating bar above a Construct — one instanced track/fill pair per bar
+ * *kind*, not per building, so a whole board of them is 2 draw calls.
  *
- * Buildings top out around 60 on this board, so a per-instance draw is not a
- * budget concern the way it would be for the hundreds of units the project
- * deliberately avoided floating health bars for (tint carries that instead).
- * Cooldown timing has no other visual representation at all, so this fills a
- * real gap rather than duplicating one.
+ * Generic rather than cooldown-specific because there are two of them now
+ * (charge-up and health) and they differ only in colour and what fills them.
+ * Buildings top out around 126 on this board, so this stays well inside the
+ * budget the project deliberately avoided spending on the hundreds of units
+ * (they carry damage as a silhouette tint instead).
  *
  * The camera never rotates (see CameraRig), so "face the camera" is a single
  * fixed tilt baked into the geometry once, not a per-frame billboard — and
@@ -40,15 +40,20 @@ export interface CooldownEntry {
  * `scale.x` by `progress` grows it rightward from a fixed anchor instead of
  * requiring a matching position offset every frame.
  */
-export class CooldownBarView {
+export class BarView {
   private readonly track: THREE.InstancedMesh
   private readonly fill: THREE.InstancedMesh
   private readonly matrix = new THREE.Matrix4()
   private readonly position = new THREE.Vector3()
   private readonly quaternion: THREE.Quaternion
   private readonly scale = new THREE.Vector3(1, 1, 1)
+  private readonly tint = new THREE.Color()
+  /** Only paid for when a caller actually varies colour per bar (health does, cooldown does not). */
+  private readonly tinted: boolean
 
-  constructor(scene: THREE.Scene, capacity: number) {
+  constructor(scene: THREE.Scene, capacity: number, fillColor: number, options: { tinted?: boolean } = {}) {
+    this.tinted = options.tinted ?? false
+
     const trackGeo = new THREE.PlaneGeometry(BAR_WIDTH, BAR_HEIGHT)
     // Left-pivoted: local x spans [0, BAR_WIDTH] instead of the default
     // [-BAR_WIDTH/2, BAR_WIDTH/2], so scaling by `progress` grows the fill
@@ -69,7 +74,7 @@ export class CooldownBarView {
       depthTest: false,
     })
     const fillMat = new THREE.MeshBasicMaterial({
-      color: FILL_COLOR,
+      color: fillColor,
       transparent: true,
       opacity: 0.92,
       depthTest: false,
@@ -88,7 +93,7 @@ export class CooldownBarView {
     scene.add(this.track, this.fill)
   }
 
-  sync(entries: readonly CooldownEntry[]): void {
+  sync(entries: readonly BarEntry[]): void {
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i]!
 
@@ -102,6 +107,10 @@ export class CooldownBarView {
       this.matrix.compose(this.position, this.quaternion, this.scale)
       this.fill.setMatrixAt(i, this.matrix)
       this.scale.set(1, 1, 1)
+
+      if (this.tinted && entry.color !== undefined) {
+        this.fill.setColorAt(i, this.tint.setHex(entry.color))
+      }
     }
 
     this.track.count = entries.length
@@ -111,6 +120,7 @@ export class CooldownBarView {
     if (entries.length > 0) {
       this.track.instanceMatrix.needsUpdate = true
       this.fill.instanceMatrix.needsUpdate = true
+      if (this.tinted && this.fill.instanceColor) this.fill.instanceColor.needsUpdate = true
     }
   }
 }

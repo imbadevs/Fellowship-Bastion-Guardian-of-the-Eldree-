@@ -8,7 +8,8 @@ import { TileMarker } from './view/TileMarker'
 import { Eldree } from './view/Eldree'
 import { InputController } from './view/InputController'
 import { BuildingView } from './view/BuildingView'
-import { CooldownBarView, type CooldownEntry } from './view/CooldownBarView'
+import { BarView, BAR_HEIGHT, type BarEntry } from './view/BarView'
+import { CooldownRingView, type RingEntry } from './view/CooldownRingView'
 import { buildingHeight } from './view/BuildingShapes'
 import { GhostView } from './view/GhostView'
 import { Economy } from './game/Economy'
@@ -75,7 +76,8 @@ rig.reset()
 const economy = new Economy(250)
 const registry = new BuildingRegistry(grid)
 const buildingView = new BuildingView(renderer.scene, registry)
-const cooldownBars = new CooldownBarView(renderer.scene, grid.cells.length)
+const cooldownRings = new CooldownRingView(renderer.scene, grid.cells.length)
+const healthBars = new BarView(renderer.scene, grid.cells.length, 0x7fe08c, { tinted: true })
 
 const sim = new Sim(grid, RUN_SEED)
 const enemyView = new ActorView(renderer.scene, grid, {
@@ -475,20 +477,55 @@ function syncReadyButton(): void {
   readyBtn.disabled = !ready
 }
 
-/** Clear space between a building's measured roofline and its cooldown bar. */
-const COOLDOWN_BAR_MARGIN = 0.18
+/** Clear space between a building's measured roofline and the first indicator above it. */
+const BAR_MARGIN = 0.18
+/** Rise from the health bar to the cooldown ring stacked above it — half the bar, a gap, then the ring's radius. */
+const RING_STACK = BAR_HEIGHT / 2 + 0.03 + 0.18
+
+/** Health fill runs green → amber → red as the Construct is worn down. */
+const HEALTH_COLORS = [0x7fe08c, 0xf2c464, 0xff7a5c] as const
+function healthColor(fraction: number): number {
+  if (fraction > 0.6) return HEALTH_COLORS[0]
+  return fraction > 0.3 ? HEALTH_COLORS[1] : HEALTH_COLORS[2]
+}
 
 /** Reused across frames to avoid a per-frame allocation. */
-const cooldownEntries: CooldownEntry[] = []
+const cooldownEntries: RingEntry[] = []
+const healthEntries: BarEntry[] = []
 
-/** Gathers spawn/attack cooldown progress for every Construct that has one. */
-function syncCooldownBars(): void {
+/**
+ * Gathers both floating indicators in one pass over the board.
+ *
+ * The health bar takes the slot nearest the roofline and the cooldown ring
+ * stacks above it, always — so a Construct taking its first hit does not
+ * shove its ring upward mid-fight. A full-health Construct simply leaves the
+ * lower slot empty, which is the whole point: a visible health bar means
+ * something is wrong.
+ */
+function syncBars(): void {
   cooldownEntries.length = 0
+  healthEntries.length = 0
+
   for (const building of registry.all()) {
     if (building.simId < 0) continue
+    const base = building.cell.surfaceY + buildingHeight(building.def.id) + BAR_MARGIN
+
+    const hp = sim.world.hp[building.simId]!
+    const maxHp = sim.world.maxHp[building.simId]!
+    // Only a hurt Construct carries a bar — at full health it is noise.
+    if (maxHp > 0 && hp < maxHp) {
+      const fraction = Math.max(0, hp / maxHp)
+      healthEntries.push({
+        worldX: building.cell.worldX,
+        worldZ: building.cell.worldZ,
+        anchorY: base,
+        progress: fraction,
+        color: healthColor(fraction),
+      })
+    }
+
     const spawn = building.def.spawn
     const weapon = building.def.weapon
-
     let progress: number
     if (spawn) {
       progress = 1 - sim.world.spawnTimer[building.simId]! / spawn.interval
@@ -503,18 +540,20 @@ function syncCooldownBars(): void {
     cooldownEntries.push({
       worldX: building.cell.worldX,
       worldZ: building.cell.worldZ,
-      anchorY: building.cell.surfaceY + buildingHeight(building.def.id) + COOLDOWN_BAR_MARGIN,
+      anchorY: base + RING_STACK,
       progress,
     })
   }
-  cooldownBars.sync(cooldownEntries)
+
+  cooldownRings.sync(cooldownEntries)
+  healthBars.sync(healthEntries)
 }
 
 function render(alpha: number, wallDt: number): void {
   enemyView.sync(sim.world, alpha, wallDt)
   unitView.sync(sim.world, alpha, wallDt)
   projectileView.sync(sim.projectiles, alpha)
-  syncCooldownBars()
+  syncBars()
   if (sim.phase === SimPhase.Running) hud.setProgress(sim.waveProgress)
   eldree.update(wallDt)
   selectMarker.update(wallDt)

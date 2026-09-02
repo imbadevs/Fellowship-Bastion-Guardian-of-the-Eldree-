@@ -197,18 +197,29 @@ happen: the ghost switches to the *upgrade's* silhouette (what you'd
 actually get, not what you're carrying), and, when dragging one Construct
 onto another, a violet beam links the two so the pairing is unambiguous.
 
-**Cooldown bars** — every Construct with a timer (spawn interval for
-spawners, attack cooldown for turrets) shows a small charge-up bar floating
-just above its roofline: empty right after a spawn/shot, full and ready when
-it fires again. Positioned per building using a measured, not hand-authored,
-height (`buildingHeight` in `BuildingShapes.ts`), so it can never drift out
-of sync with a shape that gets retuned later. One InstancedMesh pair (track +
-fill) for the whole board — a flat 2 extra draw calls whether 1 Construct is
-built or 60. Defensive structures with neither a spawner nor a
-weapon (Palisade, Healing Shrine) show no bar, since there is no cooldown to
-show. Also fixed alongside this: a freshly placed Construct's first spawn now
-waits a full cooldown like every one after it, instead of the old 35%
-head-start — the bar reads correctly against that real timing.
+**Floating indicators** — a Construct carries up to two, stacked above its
+roofline. Both are positioned from a measured, not hand-authored, height
+(`buildingHeight` in `BuildingShapes.ts`), so neither can drift out of sync
+with a shape that gets retuned later.
+
+- **Health bar**, nearest the roofline, and *only while hurt* — at full
+  health it would be noise on every tile, so its presence alone is the
+  signal that something is wrong. The fill runs green → amber → red as the
+  Construct is worn down, tinted per instance so one mesh pair covers the
+  whole board.
+- **Cooldown ring**, stacked above it: a radial sweep that closes clockwise
+  from the top, empty right after a spawn/shot and full when it fires again.
+  Per-instance progress rides an instanced attribute and the sweep is done
+  in the fragment shader, so the entire board is **one** draw call — cheaper
+  than the two the old horizontal bar needed, since track and fill share the
+  same pixels. Defensive structures with neither a spawner nor a weapon
+  (Palisade, Healing Shrine) show no ring, since there is no cooldown.
+
+The slots are fixed, so a Construct taking its first hit does not shove its
+ring upward mid-fight; a healthy one simply leaves the lower slot empty.
+Also fixed alongside the original bars: a freshly placed Construct's first
+spawn waits a full cooldown like every one after it, instead of the old 35%
+head-start — the indicator reads correctly against that real timing.
 
 **Camera reframed for an omnidirectional attack.** With the horde attacking
 from every side again, the board is framed close to centred (`FRAME_BIAS`
