@@ -199,15 +199,16 @@ export class Placement {
 
   // --- shared ---------------------------------------------------------------
 
-  private preview(cell: Cell | null): void {
+  /** Returns the merge target under `cell`, if the preview resolved to one — for callers that want to draw their own "linking to this" feedback. */
+  private preview(cell: Cell | null): PlacedBuilding | null {
     this.hoveredCell = cell
     const state = this.current
-    if (state.kind === 'idle') return
+    if (state.kind === 'idle') return null
 
     if (!cell) {
       this.ghost.hide()
       this.marker.hide()
-      return
+      return null
     }
 
     // Dragging a purchase or a lifted Construct over a matching Construct
@@ -228,15 +229,19 @@ export class Placement {
     this.ghost.show(defId, cell, mergeTarget ? (valid ? 'merge' : 'invalid') : valid ? 'valid' : 'invalid')
     this.marker.setColor(mergeTarget ? MARKER_MERGE : valid ? MARKER_VALID : MARKER_INVALID)
     this.marker.show(cell)
+    return mergeTarget
   }
 
   /**
    * Drives the live ghost/marker preview from an externally-tracked drag —
    * a board-to-board move/merge lifted via InputController's long-press,
    * which (unlike a shop-card drag) never runs through `trackPointer`.
+   * Returns the merge target currently under `cell`, if any, so the caller
+   * can draw a "linking to this one" indicator without duplicating the
+   * lookup.
    */
-  previewAt(cell: Cell | null): void {
-    this.preview(cell)
+  previewAt(cell: Cell | null): PlacedBuilding | null {
+    return this.preview(cell)
   }
 
   /** The Construct already on `cell` that buying `defId` would merge into, if any. */

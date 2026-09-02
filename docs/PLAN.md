@@ -1348,3 +1348,108 @@ visual state maps to which condition.
 Both verified via `tsc --noEmit && vite build`; visual confirmation left to
 manual playtesting rather than an automated check, since both are purely
 presentational.
+
+---
+
+## Appendix AA — merge affordances: a link beam, and highlights for shop drags too
+
+Two requests, one after the other, both about the same question a player has
+mid-drag: *what can this thing combine with?*
+
+**A beam to the target under the finger.** Requested first as "a line to
+link the dragging building with the upgradeable building on the base", then
+narrowed on sight: the board highlight should stay the way it shows *every*
+eligible partner, and the line should only connect the dragged Construct to
+the one it is actually about to merge with. `MergeLinks` draws that — from
+the lifted Construct's own tile (it stays put visually while lifted) to the
+hovered target, hidden the moment the finger moves off a match.
+
+It is driven from `InputController.onBuildingDragMove`, not from
+`Placement.onChange`, because the target changes per hover, not per state
+transition. `Placement.preview()`/`previewAt()` now *return* the merge target
+they already resolved, so main.ts can draw the beam without re-running the
+lookup or duplicating the rule.
+
+**Two rendering traps, both worth recording.** A `THREE.LineSegments` was the
+obvious first try and rendered as nothing: WebGL clamps line width to ~1px
+regardless of `linewidth`, so the beam was invisible at any real screen
+scale — the same reason `TileMarker` is a mesh rather than a line. Replacing
+it with a ribbon quad was still invisible, for a *different* reason: a ribbon
+lying flat in the XZ plane is very nearly edge-on to a camera at this
+project's fixed ~62° pitch. Standing the quad up vertically (width measured
+on Y, not in the ground plane) is what finally made it read. It also needs
+`depthTest: false` — it floats in open air at a height the surrounding tiles
+and Constructs otherwise occlude, and it is an indicator, not a scene object.
+
+**Highlights now cover shop drags, not just board drags.** Reported as "when
+there is a mergeable building on the base, the dragging building from shop
+disappears". Chasing the literal report found no disappearance: the
+merge-preview ghost renders correctly for all 16 mergeable types (verified by
+driving `previewAt` over a placed Construct of every family and checking the
+ghost's geometry), and a merge-on-buy commits correctly. What is really
+happening is that hovering a match swaps the ghost from the card's own shape
+to the *upgrade's* shape — intended since Appendix N, but with nothing else
+marking that tile as special, it reads as the dragged building vanishing and
+being replaced.
+
+The real gap behind that: `mergeHighlight` only ever ran for a board-to-board
+drag, so dragging a card from the shop lit up nothing at all. Replaced the
+'moving'-only branch with `mergeTargetsFor(state)`, which answers the same
+question `Placement.mergeTargetAt` commits on (same family, able to upgrade)
+for the whole board, and covers `'placing'` and `'moving'` alike — a shop
+card now lights up every Construct it could merge into, the same way a lifted
+one does. It deliberately covers the tap path too, not just drags: "what can
+this combine with?" is the same question whether the card is held or armed.
+
+No beam is drawn for a shop drag: both of its endpoints would be the same
+tile, since the "new" Construct only exists as the ghost already standing on
+the target.
+
+---
+
+## Appendix AB — hard waves every 5th, and the board grows by surviving them
+
+Requested directly: difficulty spikes on multiples of 5, and after each one
+the hex board expands and the Eldree grows with it.
+
+**Hard waves are a transform, not a second table.** `isHardWave(wave)` is
+`wave % 5 === 0`; `harden(def)` takes whatever the wave would have been —
+authored (waves 1–10) or the post-table scaling formula — and returns it with
+`count * 1.5`, `spacing * 0.85`, and one more lane (capped at 6). Layering it
+rather than authoring separate hard waves keeps a spike recognisably the same
+fight one notch harder, and means it keeps working past the authored table
+without a second scaling rule to maintain. Measured: wave 4 sends 14 foes on
+3 lanes, hard wave 5 sends 20 on 4; wave 9 sends 32, hard wave 10 sends 60.
+
+**Expansion moved onto the hard-wave beat.** `RING_UNLOCK_WAVE` went from
+`[0, 1, 1, 4, 8]` to `[0, 1, 1, 6, 11, 16, 21]` — each ring opens the wave
+*after* a hard wave, since `advanceWave()` increments the counter before
+calling `unlockForWave`. Surviving the spike is what earns the ground, so the
+expansion reads as that fight's reward rather than a schedule running
+alongside it.
+
+**The board needed more rings to keep that promise.** "Expands after each
+hard wave" only holds for waves 5 and 10 at the old `BOARD_RADIUS = 4`, so it
+went to 6: 19 → 37 → 61 → 91 → 127 tiles, full size once wave 20 is held,
+with two more `RING_STYLES` entries continuing the existing walk outward
+(colder, lower) so the new rings read as terrain falling away rather than
+appended. The Eldree growth needed no change — it already keys off
+`grid.visibleRing` via `Eldree.growForRing` (Appendix Z), so it grows on the
+new schedule for free, reaching scale 1.86 at ring 6. That was checked
+visually rather than assumed: at full expansion it reads as proportionate to
+the much larger board, so `SCALE_PER_RING` was left at 0.22.
+
+**Two capacity constants were silently sized to the old board** and would
+have clipped instancing at 61: `BuildingView`'s `CAPACITY` and main.ts's
+`CooldownBarView` allocation. Both now derive from the board itself
+(`tileCount(BOARD_RADIUS) - 1` and `grid.cells.length`) so they cannot drift
+from `BOARD_RADIUS` again.
+
+Hard waves are announced before they start — `Begin Wave N · Hard` on the
+ready button, and a distinct toast on start — so the spike is something to
+build toward, not an ambush.
+
+Verified in the browser: the unlock schedule opens 19/37/61/91/127 tiles at
+waves 1/6/11/16/21; a full run through wave 6 with a real defence expands the
+board only after wave 5 clears; and the full 127-tile board still renders in
+**3 draw calls at 120fps**, against the same 60-call budget.

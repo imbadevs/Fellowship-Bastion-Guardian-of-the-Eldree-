@@ -2,10 +2,11 @@ import * as THREE from 'three'
 import type { BuildingId } from '../data/buildings'
 import type { BuildingRegistry } from '../game/Buildings'
 import type { Cell } from '../hex/HexGrid'
+import { BOARD_RADIUS, tileCount } from '../data/grid'
 import { buildingGeometry } from './BuildingShapes'
 
-/** Max Constructs of any one type; the board only has 60 buildable tiles. */
-const CAPACITY = 61
+/** Max Constructs of any one type — every tile but the Eldree's, at full expansion. */
+const CAPACITY = tileCount(BOARD_RADIUS) - 1
 
 /**
  * Renders placed Constructs, one InstancedMesh per building type.

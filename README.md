@@ -29,8 +29,9 @@ phone framing rather than a wide view that hides the portrait constraint.
 
 **M1 — hex world**
 - Pointy-top axial hex math with cube rounding (`src/hex/`)
-- Board starts at rings 0–2 (19 tiles) and grows outward as rings unlock at
-  waves 4 and 8, up to 61 tiles; locked rings are not drawn at all, and the
+- Board starts at rings 0–2 (19 tiles) and grows outward each time a hard
+  wave is held (see below) — 37, 61, 91, then 127 tiles at full size after
+  wave 20; locked rings are not drawn at all, and the
   camera eases back to reframe on each expansion
 - Whole board renders as one `InstancedMesh`; top/side shading is baked into
   vertex colours so ring tinting stays on the instance attribute
@@ -150,22 +151,31 @@ game.sim.waveProgress
 The run loop is real and playable end to end: shop → place → ready → fight →
 reward → shop, indefinitely, with no scripted wave cap.
 
+**Hard waves set the run's pacing.** Every 5th wave (5, 10, 15, …) is a hard
+wave: whatever that wave would have been, half again as many foes, from one
+more direction, arriving closer together. It is layered on top of the base
+wave rather than authored separately, so it reads as the same fight one notch
+harder — and it is announced before it starts, on the `Begin Wave N · Hard`
+button and in the toast, so it can be built toward rather than sprung.
+
+Holding one is what expands the bastion: each hard wave cleared unlocks the
+next ring (19 → 37 → 61 → 91 → 127 tiles, full size after wave 20) and grows
+the Eldree with it. Expansion is the reward for the spike that just happened
+rather than a schedule of its own, which makes the whole run one repeating
+beat: build up, survive the spike, claim the ground, repeat.
+
 **Move, Merge and Sell are one drag gesture.** Tapping a Construct only ever
 shows a read-only info card (name, blurb, live HP mid-combat) — no buttons.
 To act on it, press and hold; after a beat (~180ms) it picks up, and where
 you drop it decides the outcome:
 
 - **Drop on an empty tile** — moves it there, free.
-- **Drop on a matching Construct** — merges the two into the tier-2 upgrade,
-  free (the existing Construct was already paid for). Every eligible partner
-  on the board lights up violet the moment the drag starts, and the ghost
-  preview turns violet over the specific tile you're hovering. The four
-  spawner families have a tier-2 upgrade (Barracks/War Lodge, Archery
-  Range/Bowspire, Knight's Hall/Bastion Keep, Mage Spire/Arcane Obelisk);
-  defensive structures have no tier-2 yet, so they're never mergeable. A
-  merge carries the combined garrison into the upgrade rather than mustering
-  from zero; survivors beyond the new roster cap (two full Barracks is 6
-  Warriors, a War Lodge only holds 5) have no slot to keep and are released.
+- **Drop on a matching Construct** — merges the two into the next tier, free
+  (the existing Construct was already paid for). All eight families chain
+  tier 1 → 2 → 3; tier 3 is merge-only, never drafted. A merge carries the
+  combined garrison into the upgrade rather than mustering from zero;
+  survivors beyond the new roster cap (two full Barracks is 6 Warriors, a War
+  Lodge only holds 5) have no slot to keep and are released.
 - **Drop on the recycle icon** — sells it for the standard refund. The icon
   appears over the shop dock only while a Construct is being dragged, and
   lights up as you hover it.
@@ -175,9 +185,17 @@ only a press that stays still past the hold delay counts as a pickup, which
 is what lets picking-up and panning coexist on the same tile without one
 stealing the other. Buying straight into an upgrade still works too: drag a
 shop card and drop it directly onto a matching Construct (or tap the card,
-then tap that Construct) — same violet preview, costs exactly what the card
-costs standing alone. All of this is hidden during combat — the board is
-look-but-not-touch while a wave runs.
+then tap that Construct) — costs exactly what the card costs standing alone.
+All of this is hidden during combat — the board is look-but-not-touch while
+a wave runs.
+
+**Finding a merge, mid-drag.** Whatever you're holding — a shop card or a
+Construct lifted off the board — every Construct on the board it could merge
+into blinks violet the moment it's armed, so "what can this combine with?"
+is answered before you go looking. Over a specific match, two more things
+happen: the ghost switches to the *upgrade's* silhouette (what you'd
+actually get, not what you're carrying), and, when dragging one Construct
+onto another, a violet beam links the two so the pairing is unambiguous.
 
 **Cooldown bars** — every Construct with a timer (spawn interval for
 spawners, attack cooldown for turrets) shows a small charge-up bar floating

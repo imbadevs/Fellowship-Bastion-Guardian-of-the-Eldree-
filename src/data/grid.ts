@@ -20,7 +20,12 @@ export const TILE_INSET = 0.94
 export const TILE_INNER_RADIUS = (HEX_SIZE * TILE_INSET * Math.sqrt(3)) / 2
 
 /** Outermost buildable ring at full expansion. Ring BOARD_RADIUS+1 is the enemy approach. */
-export const BOARD_RADIUS = 4
+export const BOARD_RADIUS = 6
+
+/** Tiles in a hex board of `radius` rings, centre included. */
+export function tileCount(radius: number): number {
+  return 1 + 3 * radius * (radius + 1)
+}
 
 export const enum CellState {
   /** Ring 0. Holds the Eldree. Never buildable. */
@@ -31,8 +36,15 @@ export const enum CellState {
   Locked,
 }
 
-/** Wave at which each ring becomes buildable. Index = ring number. */
-export const RING_UNLOCK_WAVE: readonly number[] = [0, 1, 1, 4, 8]
+/**
+ * Wave at which each ring becomes buildable. Index = ring number.
+ *
+ * Every ring past the starting two opens the wave *after* a hard wave (see
+ * `HARD_WAVE_INTERVAL`) — surviving the spike is what earns the ground, so
+ * expansion lands as the reward for the fight that just happened rather than
+ * on a schedule of its own. The board is at full size once wave 20 is held.
+ */
+export const RING_UNLOCK_WAVE: readonly number[] = [0, 1, 1, 6, 11, 16, 21]
 
 export interface RingStyle {
   readonly top: number
@@ -41,11 +53,19 @@ export interface RingStyle {
   readonly elevation: number
 }
 
-/** Per-ring tile colours, innermost first. Locked rings are not drawn at all. */
+/**
+ * Per-ring tile colours, innermost first. Locked rings are not drawn at all.
+ *
+ * The progression steps outward from the Eldree's warm green toward a colder,
+ * lower edge, so the board reads as terrain falling away rather than a flat
+ * disc — the outer rings continue that same walk down.
+ */
 export const RING_STYLES: readonly RingStyle[] = [
   { top: 0x3f6b4a, side: 0x24402c, elevation: 0.34 },
   { top: 0x53794f, side: 0x2c4630, elevation: 0.26 },
   { top: 0x4c7150, side: 0x293f2c, elevation: 0.2 },
   { top: 0x456851, side: 0x243a2b, elevation: 0.14 },
   { top: 0x3d5c4c, side: 0x1f3227, elevation: 0.08 },
+  { top: 0x365147, side: 0x1b2b23, elevation: 0.04 },
+  { top: 0x304740, side: 0x17251f, elevation: 0.0 },
 ]

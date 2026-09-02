@@ -13,18 +13,20 @@ import { buildingHeight } from './view/BuildingShapes'
 import { GhostView } from './view/GhostView'
 import { Economy } from './game/Economy'
 import { BuildingRegistry } from './game/Buildings'
-import { Placement } from './game/Placement'
+import { Placement, type PlacementState } from './game/Placement'
 import { Shop } from './game/Shop'
 import { Sim, SimPhase } from './sim/Sim'
 import { EnemyKind, ENEMY_KINDS } from './data/enemies'
 import { enemyGeometry } from './view/EnemyShapes'
-import { UnitClass } from './data/buildings'
+import { BUILDINGS, UnitClass } from './data/buildings'
+import { isHardWave } from './data/waves'
 import { UNIT_CLASSES } from './data/units'
 import { unitGeometry } from './view/UnitShapes'
 import { ActorView } from './view/ActorView'
 import { ProjectileView } from './view/ProjectileView'
 import { Category } from './sim/World'
 import { MergeHighlight } from './view/MergeHighlight'
+import { MergeLinks } from './view/MergeLinks'
 import { GameOverPanel } from './ui/GameOverPanel'
 import { ShopDock } from './ui/ShopDock'
 import { DragChip } from './ui/DragChip'
@@ -63,16 +65,17 @@ const ghost = new GhostView()
 renderer.scene.add(ghost.mesh)
 
 const mergeHighlight = new MergeHighlight(renderer.scene, grid.size)
+const mergeLinks = new MergeLinks(renderer.scene)
 
 rig.fitBoard(grid.visibleWorldRadius)
 rig.reset()
 
 // --- game state -------------------------------------------------------------
 
-const economy = new Economy(400)
+const economy = new Economy(250)
 const registry = new BuildingRegistry(grid)
 const buildingView = new BuildingView(renderer.scene, registry)
-const cooldownBars = new CooldownBarView(renderer.scene, 61)
+const cooldownBars = new CooldownBarView(renderer.scene, grid.cells.length)
 
 const sim = new Sim(grid, RUN_SEED)
 const enemyView = new ActorView(renderer.scene, grid, {
@@ -177,6 +180,27 @@ economy.onChange = (gold) => {
 // marked sold.
 let pendingShopIndex = -1
 
+/**
+ * Tiles holding a Construct the pending placement would merge into — the same
+ * rule `Placement.mergeTargetAt` commits on (same family, and able to
+ * upgrade), asked of the whole board instead of one tile. A lifted Construct
+ * never counts itself.
+ */
+function mergeTargetsFor(state: PlacementState): Cell[] {
+  if (state.kind === 'placing') {
+    if (!BUILDINGS[state.defId].upgradesTo) return []
+    return registry.ofType(state.defId).map((b) => b.cell)
+  }
+  if (state.kind === 'moving') {
+    if (!state.building.def.upgradesTo) return []
+    return registry
+      .ofType(state.building.def.id)
+      .filter((b) => b.entityId !== state.building.entityId)
+      .map((b) => b.cell)
+  }
+  return []
+}
+
 placement.onMessage = (text, ok) => toast.show(text, ok)
 placement.onDragMove = (x, y) => dragChip.move(x, y)
 placement.onPlaced = () => {
@@ -191,18 +215,13 @@ placement.onChange = (state) => {
   recycleZone.setVisible(draggingBuilding)
   if (!draggingBuilding) recycleZone.setArmed(false)
 
-  if (draggingBuilding && state.building.def.upgradesTo) {
-    // Dropping the lifted Construct onto a match merges it — every eligible
-    // partner lights up the moment the drag starts, since a mid-drag hover
-    // preview alone (see `previewAt`) only shows the *currently hovered* tile.
-    const matches = registry
-      .ofType(state.building.def.id)
-      .filter((b) => b.entityId !== state.building.entityId)
-      .map((b) => b.cell)
-    mergeHighlight.showAll(matches)
-  } else {
-    mergeHighlight.hideAll()
-  }
+  // Every Construct the pending placement could merge into lights up as soon
+  // as it is armed — for a shop card as much as for a lifted Construct, since
+  // "what can this combine with?" is the same question either way. The
+  // hover preview (see `previewAt`) only ever speaks for the tile actually
+  // under the finger.
+  mergeHighlight.showAll(mergeTargetsFor(state))
+  if (!draggingBuilding) mergeLinks.hide()
 
   if (state.kind !== 'idle') {
     selectMarker.hide()
@@ -251,7 +270,7 @@ sim.events.onEldreeDamaged = (hp, max) => {
 sim.events.onEnemyKilled = (gold) => economy.grant(gold)
 
 sim.events.onWaveCleared = (cleared) => {
-  const goldBonus = 40 + cleared * 12
+  const goldBonus = 60 + cleared * 12
   const heal = Math.min(sim.eldreeMaxHp - sim.eldreeHp, 10 + cleared * 2)
   economy.grant(goldBonus)
   sim.eldreeHp += heal
@@ -290,7 +309,7 @@ function startWave(): void {
   selectMarker.hide()
   shopDock.setVisible(false)
   sim.startWave(wave)
-  toast.show(`Wave ${wave} approaches`, false)
+  toast.show(isHardWave(wave) ? `Wave ${wave} — a hard wave breaks on the bastion` : `Wave ${wave} approaches`, false)
 }
 
 function restartRun(): void {
@@ -371,8 +390,16 @@ input.onBuildingDragStart = (cell) => {
 }
 input.onBuildingDragMove = (x, y, cell) => {
   dragChip.move(x, y)
-  placement.previewAt(cell)
+  const mergeTarget = placement.previewAt(cell)
   recycleZone.setArmed(recycleZone.contains(x, y))
+  // Only the tile actually under the finger gets a line — MergeHighlight
+  // already shows every eligible partner, this just says "dropping here
+  // merges with that one."
+  if (mergeTarget && placement.state.kind === 'moving') {
+    mergeLinks.show(placement.state.origin, [mergeTarget.cell])
+  } else {
+    mergeLinks.hide()
+  }
 }
 input.onBuildingDragEnd = (cell, x, y) => {
   if (placement.state.kind !== 'moving') return
@@ -434,7 +461,9 @@ let readyLabel = ''
 function syncReadyButton(): void {
   const ready = canStartWave()
   const label = ready
-    ? `Begin Wave ${wave}`
+    ? isHardWave(wave)
+      ? `Begin Wave ${wave} · Hard`
+      : `Begin Wave ${wave}`
     : sim.phase === SimPhase.Running
       ? 'The wave rages on'
       : placement.state.kind === 'moving'
@@ -492,6 +521,7 @@ function render(alpha: number, wallDt: number): void {
   placeMarker.update(wallDt)
   ghost.update(wallDt)
   mergeHighlight.update(wallDt)
+  mergeLinks.update(wallDt)
   rig.tick(wallDt)
   renderer.updateFog(rig.cameraDistance, rig.framedRadius)
   renderer.render()

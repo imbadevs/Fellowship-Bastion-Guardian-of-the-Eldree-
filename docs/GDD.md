@@ -26,12 +26,20 @@ hit — and the one after that.
 Losing all the Eldree's HP ends the run; **Begin again** resets gold and the
 board from scratch.
 
+**Hard waves.** Every 5th wave (5, 10, 15, …) is a hard wave — the same fight
+one notch harder: half again as many foes, arriving from one more direction
+and closer together. It's flagged before it starts, on the Begin Wave button
+and in the toast, so it's something to build toward rather than be ambushed
+by. Holding one is what earns the next ring of board (and a bigger Eldree),
+making the spike the run's pacing beat: build up, survive, expand, repeat.
+
 ## The board
 
 - Hex grid, pointy-top, the Eldree fixed at the centre tile.
-- Starts at 19 tiles (rings 0–2) and unlocks outward to 61 tiles as waves
-  progress (ring 3 at wave 4, ring 4 at wave 8) — the Eldree itself visibly
-  grows a little with each unlock, so a bigger board reads as a bigger tree.
+- Starts at 19 tiles (rings 0–2) and unlocks one ring outward every time a
+  hard wave is held — 37 tiles after wave 5, 61 after 10, 91 after 15, and
+  127 (full size) after 20. The Eldree itself visibly grows with each
+  unlock, so a bigger board reads as a bigger tree.
 - No inherent "front." `WaveDef.lanes` (1–6) spreads each wave's spawns
   across that many evenly-arced directions — a wave from one side is a very
   different problem than the same headcount surrounding you from six.
@@ -98,6 +106,13 @@ is actually running — Prep is a building phase, not a free mustering phase.
 - **Buy straight into an upgrade** — drag a shop card and drop it directly
   onto a matching Construct already on the board. Costs exactly the card's
   price; the existing Construct was already paid for.
+
+**Merge affordances.** Whatever is being held — a shop card or a lifted
+Construct — every Construct on the board it could merge into blinks violet
+as soon as it's armed. Over a specific match, the ghost switches to
+the upgrade's silhouette (what you'd get, not what you're carrying), and a
+board-to-board drag also draws a violet beam to the one target it would
+pair with.
 
 All of the above is disabled during a wave — the board is look-but-not-touch
 while combat runs.

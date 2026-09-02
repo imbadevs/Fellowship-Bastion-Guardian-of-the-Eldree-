@@ -18,6 +18,14 @@ export class TileMarker {
     color: number,
     private readonly baseOpacity: number,
     private readonly pulseAmount = 0,
+    /** Radians per second of the pulse. Higher is faster. */
+    private readonly pulseSpeed = 3.4,
+    /**
+     * Exponent applied to the pulse's sine, keeping its sign. 1 leaves a
+     * plain breathe; below 1 flattens the curve toward its extremes, which
+     * reads as a blink — on, off — rather than a slow swell.
+     */
+    private readonly pulseShape = 1,
   ) {
     const geometry = new THREE.CylinderGeometry(tileSize * 0.95, tileSize * 0.95, 0.05, 6)
     this.material = new THREE.MeshBasicMaterial({
@@ -52,10 +60,17 @@ export class TileMarker {
     this.material.color.setHex(hex)
   }
 
+  /** Restarts the pulse, so a group of markers shown together blinks in step. */
+  resetPulse(): void {
+    this.pulse = 0
+  }
+
   update(dt: number): void {
     if (!this.mesh.visible || this.pulseAmount === 0) return
-    this.pulse += dt * 3.4
-    this.material.opacity = this.baseOpacity + Math.sin(this.pulse) * this.pulseAmount
+    this.pulse += dt * this.pulseSpeed
+    const wave = Math.sin(this.pulse)
+    const shaped = this.pulseShape === 1 ? wave : Math.sign(wave) * Math.abs(wave) ** this.pulseShape
+    this.material.opacity = this.baseOpacity + shaped * this.pulseAmount
   }
 
   dispose(): void {
