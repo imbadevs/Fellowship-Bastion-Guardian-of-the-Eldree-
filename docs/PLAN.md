@@ -1497,3 +1497,189 @@ Verified in the browser against hand-set values: three damaged Constructs
 fourth at full health produced no bar at all, and rings at 25%/75%/100%
 swept correctly — with the Palisade correctly showing a health bar and no
 ring, having neither spawner nor weapon.
+
+---
+
+## Appendix AD — the curve compounds per era, and a wave that could never end
+
+Requested: difficulty should rise after each hard wave, not just spike on it.
+
+**The mismatch.** Past the authored table the horde grew linearly — `1 +
+0.18 * wavesPastTen` off a fixed base. The player does not grow linearly:
+strength jumps at each hard wave, when a ring unlocks (a third more tiles)
+and the gold from holding the spike buys into it. A linear horde against a
+stepped defence falls further behind every era, which is exactly the flat
+late game the request describes.
+
+**Now it compounds per era.** `eraOf(wave)` groups waves in fives, and
+generated waves scale by `ERA_GROWTH ** eras * WAVE_GROWTH ** withinEra`
+(1.45 and 1.08). Each era therefore *starts* about half again as large as
+the previous one started, while still ramping gently inside the era:
+
+| wave | 11 | 15 (hard) | 16 | 20 (hard) | 21 | 25 (hard) |
+|---|---|---|---|---|---|---|
+| old | 46 | 115 | 84 | 167 | 120 | 224 |
+| new | 61 | 125 | 92 | 192 | 141 | 292 |
+
+Era openers: 61 → 92 → 141 → 218, a consistent ~1.5x step. The dip that used
+to follow a hard wave is gone: wave 11 was 46 against hard wave 10's 60, and
+is now 61. Trolls and Wraiths carry an extra `ELITE_GROWTH ** eras` (1.12) so
+the elite share climbs 40% → 50% — later eras have to be answered with
+armour-piercing and magic-reaching Constructs, not volume. Waves 1–10 keep
+their hand-authored shapes untouched; they already step from an era-0 average
+of ~10 foes to an era-1 average of ~28.
+
+**The change exposed a latent soft lock.** `Sim.spawnEnemy` incremented
+`spawnedTotal` *after* its `if (id < 0) return` guard, while the caller
+advanced `entry.spawned` regardless. So an exhausted entity pool meant
+`spawnsRemaining` could never reach zero, `checkWaveEnd` never fired, and the
+wave hung forever with no enemies left to kill — verified directly: with the
+pool filled, a wave sat at `spawnsRemaining: 1`, `enemyCount: 0` for 4000
+ticks. The tally now counts spawns *attempted*, so a full pool drops a foe
+instead of stranding the run.
+
+**`MAX_ENTITIES` was also sized for the old board.** 512 dates from a 61-tile
+board; at 127 tiles a full board of Constructs plus mustered garrisons
+measures ~300 on its own, leaving too little headroom for a late wave sending
+nearly 300 more. Raised to 1024 (~120 KB of typed arrays, nothing against the
+budget) so the authored difficulty actually arrives.
+
+Verified headlessly: waves 11/15/20/25 now deliver 100% of their spawns and
+terminate, peak concurrency ~300 against the new 1024 ceiling. A threshold
+sweep at wave 25 (292 foes) went defeat at 3 and 6 tier-2 Constructs, held at
+12 — with 0 as a control, dying in 14s having killed nothing. Those trials
+use idealised compact placement and uniform tier-2 Constructs, so they bound
+the curve rather than settle it; `ERA_GROWTH` is the single dial if real play
+says otherwise.
+
+---
+
+## Appendix AE — upgrading has to beat spamming
+
+Requested: harder, and more strategic — higher-tier Constructs should carry
+more advantage, so the game pushes toward upgrading rather than covering the
+board in cheap buildings.
+
+**Spamming was not just viable, it was optimal.** The turret lines made this
+plainest: a Ballista does 34 dmg / 1.8s = 18.9 dps, so a Heavy had to beat
+37.8 and a Siege 75.6 to be worth the merges. They did 32.7 and 53.8 — a
+Siege Ballista delivered *two thirds* of the four Ballistas it was built
+from. Walls were the same story (two Palisades 840 hp against one Reinforced
+at 610). Only the spawner lines came out ahead, and only because unit `stat`
+scaling multiplies hp and damage together, so survivability compounds.
+
+**Every family now beats the sum it replaced**, checked at an equal tile
+budget rather than per building:
+
+| line | 4 tiles of tier 1 | 1 tile of tier 3 |
+|---|---|---|
+| Barracks (dps / hp) | 184 / 1140 | 339 / 1729 |
+| Ballista (dps) | 75.6 | 86.4 |
+| Rune Ward (dps) | 50.9 | 57.5 |
+| Palisade (hp) | 1680 | 2150 |
+
+**Tier scaling grew a qualitative half.** `TIER_SCALING` was one number
+multiplying hp and damage; it is now a profile of `stat`, `range` and
+`haste` (tier 2 at 1.65 / 1.10 / 0.92, tier 3 at 2.6 / 1.22 / 0.82). Reach
+and swing speed are what make a merged garrison play differently rather than
+just hit harder — they change where it is worth standing.
+
+**Foes now harden per era, not only multiply.** With the player's power
+growing in quality, a horde that only grew in headcount ends up answered by a
+handful of tier-3 Constructs forever. `enemyToughness(wave)` scales each
+foe's hp and damage by 1.18 per era past the authored table, which buys
+difficulty without spending entity budget — a tougher wave costs the same
+simulation as a weaker one of the same size. Waves 1–10 are explicitly
+excluded: an Orc still has 40 hp through the authored intro, and only reaches
+47 at wave 11 and 66 at wave 25. `ERA_GROWTH` eased back 1.6 → 1.5 to pay
+for it, so headcount grows more slowly than before while total pressure rises.
+
+Measured as the fewest tiles needed to hold a wave — the question the whole
+change is about:
+
+| wave | foes | tier 1 | tier 2 | tier 3 |
+|---|---|---|---|---|
+| 11 | 62 | 13 | 5 | 4 |
+| 15 | 128 | 20 | 8 | 4 |
+| 20 | 204 | 26 | 8 | 5 |
+| 25 | 321 | 34 | 13 | 5 |
+
+Difficulty now actually climbs (tier-1 demand 13 → 34 tiles where it used to
+sit flat around 16–20), and upgrading is worth roughly 7x its tiles by wave
+25. Peak concurrency with a full tier-3 board against wave 25 measured 493
+entities — comfortably inside the 1024 ceiling raised in Appendix AD, and
+proof that ceiling was needed: it would have overrun the old 512.
+
+---
+
+## Appendix AF — the horde could not actually break anything
+
+Reported directly: enemies felt weak, and no Construct was ever destroyed.
+Measured before touching anything, at the *marginal* defence where attrition
+should show most: wave 15 on 8 tier-2 Constructs finished with **zero**
+destroyed and the worst survivor at 82% health; wave 20 with zero destroyed.
+The health bars added in Appendix AC had almost nothing to display.
+
+**Why nothing died.** Three things compounded. A Construct carries armour 12,
+so it takes ~89% of incoming damage. An Orc deals 6 per 1.1s, which is 4.87
+dps after that. And Appendix Y — correctly, to stop an enemy grinding on a
+weaponless Palisade for 86 seconds and looking frozen — gives an enemy only
+`ENEMY_CONSTRUCT_ENGAGE_LIMIT` (5s) on a Construct before it disengages for
+4s. So one Orc's entire commitment to a building removes about 24 damage:
+4% of a War Lodge. Buildings were effectively indestructible, and the
+anti-freeze fix is what made them so.
+
+**Siege damage, per enemy.** Rather than raise enemy damage across the board
+(which would also hit units and the Eldree, and undo balance measured in
+Appendix AE), `EnemyDef` gained a `siege` multiplier applied only when a
+Shadow entity damages a `Category.Construct`. Orc 2.5, Troll 4.5, Wraith
+1.5 — chosen to keep the roster's identities distinct rather than as one
+flat number: the Troll becomes the thing that breaks your line, the Orc the
+thing that gets past it, and the Wraith already ignores buildings to drift at
+the Eldree. Only the direct hit is multiplied, not splash. Appendix Y's
+engagement limit is untouched, so the anti-freeze behaviour it bought is
+kept — a foe still disengages and reroutes, it just does meaningful work
+while it is there.
+
+**It made attrition the cost of spreading thin.** Minimum tiles to hold, and
+what holding costs in buildings:
+
+| wave | foes | tier 1 | tier 2 | tier 3 |
+|---|---|---|---|---|
+| 5 | 20 | 6 | 3 | 3 |
+| 10 | 60 | 13 | 5 | 3 |
+| 15 | 128 | 20 (lost 3) | 8 | 4 |
+| 20 | 204 | 26 (lost 6) | 10 | 5 |
+| 25 | 321 | 34 (lost 8) | 16 (lost 1) | 5 |
+
+A tier-1 board holding wave 25 loses 8 Constructs doing it and has to buy
+them back; a tier-3 board loses none, because Appendix AE's HP retune made
+upgrades genuinely tougher rather than only harder-hitting. Upgrading now
+protects the investment as well as out-performing it, which is the second
+half of the reason to merge.
+
+Confirmed live as well as in the harness: ten Constructs strung along the
+outer ring failed to hold wave 15, buildings visibly dropping through 85%,
+81%, 76%, 74% before the Eldree fell — the exact reading the health bars
+exist to give.
+
+**Follow-up: the horde's damage doubled, as rate rather than as spikes.**
+Requested straight after — enemies still hit too softly — with the
+clarification that dps was the number to move. Splitting the doubling across
+both terms rather than inflating damage alone keeps a Troll from deleting a
+unit in one swing, and makes the horde visibly swing more often, which is
+half of why it reads as more aggressive:
+
+| enemy | damage | interval | dps |
+|---|---|---|---|
+| Orc | 6 → 8 | 1.1 → 0.75 | 5.45 → 10.67 (x1.96) |
+| Troll | 22 → 30 | 1.9 → 1.3 | 11.58 → 23.08 (x1.99) |
+| Wraith | 11 → 15 | 1.4 → 0.95 | 7.86 → 15.79 (x2.01) |
+
+The early game barely moved — waves 5 and 10 still ask for the same 6 and 13
+tier-1 tiles — because those waves are small enough that the defence is
+never the bottleneck. The late game tightened where it should: wave 20's
+tier-1 requirement went 26 tiles to 34, and wave 25's went 34 to 45 while
+the buildings lost holding it rose from 8 to 14. Tier-3 moved barely at all
+(5 tiles to 6), so the answer to a harder horde is still to upgrade rather
+than to buy more.

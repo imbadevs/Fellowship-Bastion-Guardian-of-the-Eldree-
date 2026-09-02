@@ -33,6 +33,19 @@ and in the toast, so it's something to build toward rather than be ambushed
 by. Holding one is what earns the next ring of board (and a bigger Eldree),
 making the spike the run's pacing beat: build up, survive, expand, repeat.
 
+Each hard wave also raises the floor for everything after it. The player's
+strength grows in steps — a new ring is a third more room to build — so the
+horde grows in steps to match: every era is roughly half again as large as
+the one before, leans further toward Trolls and Wraiths, and fields foes that
+are individually tougher, which raw volume cannot answer.
+
+**Upgrading, not spreading, is the answer to that.** A tier's output beats
+the sum of what merged into it, and higher tiers reach further and strike
+faster on top of the raw numbers — so the same wave that needs 34 tiles of
+tier-1 Constructs is held by 5 tiles of tier-3. Tiles are the scarce
+resource, which makes "merge or spread" the central decision of a run rather
+than a convenience.
+
 ## The board
 
 - Hex grid, pointy-top, the Eldree fixed at the centre tile.
@@ -49,10 +62,12 @@ making the spike the run's pacing beat: build up, survive, expand, repeat.
 | Enemy | Role | Notes |
 |---|---|---|
 | **Orc** | Cheap, common | Baseline threat, no armour or resist |
-| **Troll** | Armoured bruiser | Heavy physical mitigation — a Ballista problem |
+| **Troll** | Armoured bruiser, wall-breaker | Heavy physical mitigation — a Ballista problem. Hits Constructs 4.5x harder than flesh, so an unanswered Troll eats your line |
 | **Wraith** | Flier | Ignores the routing field, drifts straight at the Eldree, high magic resist — a Rune Ward problem |
 
-Every enemy that reaches a Construct or the Eldree fights it in melee.
+Every enemy that reaches a Construct or the Eldree fights it in melee, and
+hits buildings harder than it hits flesh (Orc 2.5x, Troll 4.5x, Wraith
+1.5x) — Constructs are meant to be lost and replaced, not to stand forever.
 Killing one grants gold. An enemy that fixates on a single Construct for too
 long (5s) gives up and reroutes rather than grinding forever — so a wall
 slows the horde, it never traps an attacker in place indefinitely either.

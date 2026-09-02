@@ -3,7 +3,7 @@ import type { BuildingDef } from '../data/buildings'
 import { UnitClass } from '../data/buildings'
 import { ENEMIES, type EnemyKind } from '../data/enemies'
 import { TIER_SCALING, UNITS, type UnitDef } from '../data/units'
-import { waveDef, waveTotal, type SpawnGroup } from '../data/waves'
+import { enemyToughness, waveDef, waveTotal, type SpawnGroup } from '../data/waves'
 import type { Cell, HexGrid } from '../hex/HexGrid'
 import { FlowField } from './FlowField'
 import { Projectiles, ProjectileKind } from './Projectiles'
@@ -373,6 +373,14 @@ export class Sim {
   }
 
   private spawnEnemy(kind: EnemyKind): void {
+    // Tallied before the pool is asked for a slot, so this counts spawns
+    // *attempted* rather than entities that fit. If a full pool skipped the
+    // tally instead, `spawnsRemaining` could never reach zero and
+    // `checkWaveEnd` would never fire — the wave would hang with no enemies
+    // left to kill and no way to end it. Dropping a foe under extreme
+    // pressure is a far better failure than a run that cannot continue.
+    this.spawnedTotal++
+
     const def = ENEMIES[kind]
     const id = this.world.spawn()
     if (id < 0) return
@@ -390,8 +398,10 @@ export class Sim {
     w.posZ[id] = Math.cos(angle) * distance
     w.prevX[id] = w.posX[id]!
     w.prevZ[id] = w.posZ[id]!
-    w.hp[id] = def.hp
-    w.maxHp[id] = def.hp
+    // Later eras field the same foes, hardened — see `enemyToughness`.
+    const tough = enemyToughness(this.wave)
+    w.hp[id] = def.hp * tough
+    w.maxHp[id] = w.hp[id]!
     w.speed[id] = def.speed
     w.radius[id] = def.radius
     w.archetype[id] = kind
@@ -399,15 +409,13 @@ export class Sim {
     w.team[id] = Team.Shadow
     w.armor[id] = def.armor
     w.resist[id] = def.resist
-    w.damage[id] = def.damage
+    w.damage[id] = def.damage * tough
     w.range[id] = 0.55
     w.attackInterval[id] = def.attackInterval
     w.damageType[id] = DamageType.Physical
     w.splash[id] = 0
     w.flags[id] = def.flying ? EntityFlag.Flying : 0
     w.yaw[id] = angle + Math.PI
-
-    this.spawnedTotal++
   }
 
   /** Constructs top their garrison back up to roster over time, while a wave is running. */
@@ -431,7 +439,8 @@ export class Sim {
   private spawnUnit(owner: number, def: BuildingDef, slot: number): void {
     const spawn = def.spawn!
     const unit = UNITS[spawn.unitClass]
-    const scale = TIER_SCALING[def.tier] ?? 1
+    const tier = TIER_SCALING[def.tier] ?? TIER_SCALING[1]!
+    const scale = tier.stat
 
     const id = this.world.spawn()
     if (id < 0) {
@@ -449,8 +458,8 @@ export class Sim {
     w.hp[id] = unit.hp * scale
     w.maxHp[id] = w.hp[id]!
     w.damage[id] = unit.damage * scale
-    w.range[id] = unit.range
-    w.attackInterval[id] = unit.attackInterval
+    w.range[id] = unit.range * tier.range
+    w.attackInterval[id] = unit.attackInterval * tier.haste
     w.armor[id] = unit.armor
     w.resist[id] = unit.resist
     w.damageType[id] = unit.damageType
@@ -709,7 +718,14 @@ export class Sim {
     type: DamageType,
     splash: number,
   ): void {
-    applyDamage(this.world, target, amount, type)
+    // The horde hits buildings harder than it hits flesh (see `EnemyDef.siege`).
+    // Only the direct hit is multiplied, not the splash it throws off.
+    const w = this.world
+    const siege =
+      w.team[source] === Team.Shadow && w.category[target] === Category.Construct
+        ? ENEMIES[w.archetype[source] as EnemyKind].siege
+        : 1
+    applyDamage(this.world, target, amount * siege, type)
     if (splash > 0) {
       applySplash(
         this.world,

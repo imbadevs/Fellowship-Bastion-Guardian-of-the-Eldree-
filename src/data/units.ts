@@ -131,5 +131,33 @@ export const UNIT_CLASSES: readonly UnitClass[] = [
   UnitClass.Mage,
 ]
 
-/** Stat multiplier applied to units from a tier-2 or tier-3 Construct. */
-export const TIER_SCALING: Record<number, number> = { 1: 1, 2: 1.45, 3: 1.9 }
+/**
+ * What a Construct's tier does to the units it musters.
+ *
+ * Merging trades tiles and bodies for quality — two Barracks (6 Warriors on
+ * two tiles) become one War Lodge (5 Warriors on one). For that to be a
+ * decision rather than a downgrade, the survivors have to be worth more than
+ * the ones given up: a tier-2 unit must beat 6/5 of a tier-1, and a tier-3
+ * must beat 12/7 of one, or spamming cheap Constructs across the board would
+ * simply be the better play.
+ *
+ * `stat` scales hp and damage together, so a higher-tier unit both hits
+ * harder and lives longer — the two compound, which is most of why
+ * concentration wins. `range` and `haste` are the qualitative half: a
+ * tier-3 garrison reaches further and swings faster, which changes where you
+ * want it standing, not just how big its numbers are.
+ */
+export interface TierProfile {
+  /** Multiplies hp and damage. */
+  readonly stat: number
+  /** Multiplies attack reach. */
+  readonly range: number
+  /** Multiplies the interval between swings — below 1 is faster. */
+  readonly haste: number
+}
+
+export const TIER_SCALING: Record<number, TierProfile> = {
+  1: { stat: 1, range: 1, haste: 1 },
+  2: { stat: 1.65, range: 1.1, haste: 0.92 },
+  3: { stat: 2.6, range: 1.22, haste: 0.82 },
+}

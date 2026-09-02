@@ -32,6 +32,17 @@ export interface EnemyDef {
    * Wraiths are the reason a perimeter alone is not a defence.
    */
   readonly flying: boolean
+  /**
+   * Damage multiplier against Constructs, on top of the usual mitigation.
+   *
+   * Flesh and timber are not the same target. Without this a Construct is
+   * effectively indestructible: an Orc's 6 damage, after a Construct's
+   * armour and the engagement limit that stops it grinding forever, removes
+   * about 4% of a War Lodge before it gives up and reroutes. Splitting siege
+   * from raw damage also keeps the enemy roster distinct — a Troll is the
+   * thing that breaks your line, an Orc is the thing that gets past it.
+   */
+  readonly siege: number
 }
 
 export const ENEMIES: Record<EnemyKind, EnemyDef> = {
@@ -42,11 +53,12 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
     speed: 1.15,
     armor: 0,
     resist: 0,
-    damage: 6,
-    attackInterval: 1.1,
+    damage: 8,
+    attackInterval: 0.75,
     radius: 0.3,
     gold: 4,
     flying: false,
+    siege: 2.5,
   },
   [EnemyKind.Troll]: {
     kind: EnemyKind.Troll,
@@ -55,11 +67,12 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
     speed: 0.62,
     armor: 45,
     resist: 0,
-    damage: 22,
-    attackInterval: 1.9,
+    damage: 30,
+    attackInterval: 1.3,
     radius: 0.42,
     gold: 14,
     flying: false,
+    siege: 4.5,
   },
   [EnemyKind.Wraith]: {
     kind: EnemyKind.Wraith,
@@ -68,11 +81,12 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
     speed: 0.95,
     armor: 0,
     resist: 0.6,
-    damage: 11,
-    attackInterval: 1.4,
+    damage: 15,
+    attackInterval: 0.95,
     radius: 0.32,
     gold: 10,
     flying: true,
+    siege: 1.5,
   },
 }
 

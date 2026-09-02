@@ -67,6 +67,35 @@ export function isHardWave(wave: number): boolean {
 }
 
 /**
+ * Which era a wave belongs to, zero-based: waves 1–5 are era 0, 6–10 era 1,
+ * and so on. An era ends on a hard wave, and clearing that hard wave is what
+ * unlocks the next ring of board (see `RING_UNLOCK_WAVE`), so eras are the
+ * unit the whole run is paced in.
+ */
+export function eraOf(wave: number): number {
+  return Math.floor((wave - 1) / HARD_WAVE_INTERVAL)
+}
+
+/**
+ * How the horde grows once past the authored table.
+ *
+ * The player's strength does not grow smoothly — it jumps at each hard wave,
+ * when a new ring opens (a third more tiles to build on) and the gold from
+ * holding the spike buys into it. Growth that was linear per wave therefore
+ * fell further behind with every era. These compound per *era* instead, so
+ * each ring the player earns is met by a horde that grew in the same step.
+ */
+const ERA_GROWTH = 1.5
+/** The gentler ramp between waves inside a single era. */
+const WAVE_GROWTH = 1.08
+/**
+ * Trolls and Wraiths grow faster than Orcs on top of that, so later eras are
+ * answered with the right Constructs rather than simply more of them — armour
+ * and magic resistance are the two problems raw volume cannot solve.
+ */
+const ELITE_GROWTH = 1.12
+
+/**
  * Turns a wave into its hard-wave form.
  *
  * Layered on top of whatever the base wave would have been rather than
@@ -84,27 +113,57 @@ function harden(def: WaveDef): WaveDef {
   }
 }
 
+/** The last era the authored table covers — generated eras escalate from there. */
+const AUTHORED_ERAS = eraOf(WAVES.length)
+
 /**
- * Waves past the authored table scale instead of ending the run, so M3 can be
- * pushed until something breaks. The real 20-wave arc is authored at M7.
+ * How much tougher each individual foe gets per era past the authored table.
+ *
+ * The player's power grows in quality as well as quantity — merging turns
+ * bodies into better bodies (see `TIER_SCALING`) — so a horde that only ever
+ * grew in headcount would eventually be answered by a handful of tier-3
+ * Constructs holding a whole board. Scaling the foes themselves keeps that
+ * from settling, and does it without spending entity budget: a tougher wave
+ * costs the same simulation as a weaker one of the same size.
+ */
+const ERA_TOUGHNESS = 1.18
+
+/** Multiplier on an individual enemy's hp and damage at `wave`. 1 through the authored table. */
+export function enemyToughness(wave: number): number {
+  return ERA_TOUGHNESS ** Math.max(0, eraOf(wave) - AUTHORED_ERAS)
+}
+
+/**
+ * The wave sent once the authored table runs out.
+ *
+ * Built from the table's final wave, escalated by how many eras have passed
+ * since. Within an era it ramps gently; crossing into a new one is the step,
+ * which is what makes surviving a hard wave feel like it moved the run into
+ * a harder chapter rather than just surviving one bad night.
+ */
+function generated(wave: number): WaveDef {
+  const eras = eraOf(wave) - AUTHORED_ERAS
+  const withinEra = (wave - 1) % HARD_WAVE_INTERVAL
+  const scale = ERA_GROWTH ** eras * WAVE_GROWTH ** withinEra
+  const elite = scale * ELITE_GROWTH ** eras
+
+  return {
+    lanes: 6,
+    groups: [
+      orcs(Math.round(24 * scale), 0, 0.4),
+      trolls(Math.round(8 * elite), 4),
+      wraiths(Math.round(8 * elite), 7),
+    ],
+  }
+}
+
+/**
+ * Waves past the authored table scale instead of ending the run, so the game
+ * can be pushed until something breaks. The real 20-wave arc is authored at
+ * M7.
  */
 export function waveDef(wave: number): WaveDef {
-  const authored = WAVES[wave - 1]
-  const base =
-    authored ??
-    (() => {
-      const over = wave - WAVES.length
-      const scale = 1 + over * 0.18
-      return {
-        lanes: 6,
-        groups: [
-          orcs(Math.round(24 * scale), 0, 0.4),
-          trolls(Math.round(8 * scale), 4),
-          wraiths(Math.round(8 * scale), 7),
-        ],
-      }
-    })()
-
+  const base = WAVES[wave - 1] ?? generated(wave)
   return isHardWave(wave) ? harden(base) : base
 }
 

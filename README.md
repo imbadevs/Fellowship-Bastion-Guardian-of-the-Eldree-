@@ -164,6 +164,51 @@ the Eldree with it. Expansion is the reward for the spike that just happened
 rather than a schedule of its own, which makes the whole run one repeating
 beat: build up, survive the spike, claim the ground, repeat.
 
+**Upgrading has to beat spamming, or it is not a decision.** It did not. A
+Siege Ballista put out 53.8 dps where the four Ballistas it was merged from
+put out 75.6 — merging a turret line was a straight downgrade you paid four
+purchases for, so covering the board in cheap Constructs was simply the
+better play. Every family is now retuned so a tier's output beats the sum it
+replaced, and tier scaling reaches past raw numbers: a higher-tier garrison
+also reaches further and swings faster, so concentration changes where you
+want it standing rather than only how big it hits. Measured as the fewest
+tiles needed to hold a wave:
+
+| wave | foes | tier 1 | tier 2 | tier 3 |
+|---|---|---|---|---|
+| 11 | 62 | 13 | 5 | 4 |
+| 15 | 128 | 20 | 8 | 4 |
+| 20 | 204 | 26 | 8 | 5 |
+| 25 | 321 | 34 | 13 | 5 |
+
+Spamming tier 1 through wave 25 wants 34 tiles and the gold to keep buying
+them; upgrading holds the same wave on 5.
+
+**Constructs are destructible, and the horde sieges.** They were not, in
+practice: a Construct's armour plus the engagement limit that stops an enemy
+grinding on one forever meant an Orc removed about 4% of a War Lodge before
+giving up and rerouting, so nothing on the board was ever really at risk.
+Enemies now carry a separate `siege` multiplier against Constructs — Orc
+2.5x, Troll 4.5x, Wraith 1.5x — which keeps the enemy roster distinct: the
+Troll is the thing that breaks your line, the Orc is the thing that gets
+past it, and the Wraith was never interested in your buildings anyway. The
+attrition falls hardest on spread-out cheap Constructs: holding wave 25 on
+tier 1 now costs 8 buildings destroyed along the way, tier 2 costs 1, and
+tier 3 costs none — so upgrading protects the investment as well as
+out-performing it.
+
+**The curve compounds per era, not per wave.** Because the player's strength
+jumps in steps — a new ring is a third more tiles to build on, bought with
+the gold from holding the spike — a horde that grew by a flat amount each
+wave fell further behind with every era. Past the authored table the counts
+now compound by era (~45% per era, plus a gentle ~8% between waves inside
+one), so each ring earned is met by a horde that grew in the same step:
+era 2 opens at 61 foes, era 3 at 92, era 4 at 141, era 5 at 218. Trolls and
+Wraiths grow faster than Orcs on top of that, so the elite share climbs from
+40% to about 50% — later eras are answered with the right Constructs rather
+than simply more of them, since armour and magic resistance are the two
+problems raw volume cannot solve.
+
 **Move, Merge and Sell are one drag gesture.** Tapping a Construct only ever
 shows a read-only info card (name, blurb, live HP mid-combat) — no buttons.
 To act on it, press and hold; after a beat (~180ms) it picks up, and where
@@ -175,7 +220,8 @@ you drop it decides the outcome:
   tier 1 → 2 → 3; tier 3 is merge-only, never drafted. A merge carries the
   combined garrison into the upgrade rather than mustering from zero;
   survivors beyond the new roster cap (two full Barracks is 6 Warriors, a War
-  Lodge only holds 5) have no slot to keep and are released.
+  Lodge only holds 5) have no slot to keep and are released. **Upgrading beats
+  spreading**, and deliberately so — see below.
 - **Drop on the recycle icon** — sells it for the standard refund. The icon
   appears over the shop dock only while a Construct is being dragged, and
   lights up as you hover it.

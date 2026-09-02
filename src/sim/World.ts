@@ -9,7 +9,19 @@
  * interpolate between sim steps — the sim runs at 30 Hz, the display does not.
  */
 
-export const MAX_ENTITIES = 512
+/**
+ * Ceiling on every entity at once — Constructs, their garrisons, and the horde
+ * share this one pool.
+ *
+ * 512 was sized when the board topped out at 61 tiles. It now reaches 127, so
+ * a full board is ~126 Constructs plus their mustered units, which alone
+ * measures around 300 — leaving too little headroom for a late wave that sends
+ * close to 300 of its own. The pool degrades safely when exhausted (`spawn`
+ * returns -1 and the spawn is skipped, see `Sim.spawnEnemy`), but a horde that
+ * silently fails to arrive is not the difficulty that was authored. At ~30
+ * typed arrays this costs about 120 KB, which is nothing against the budget.
+ */
+export const MAX_ENTITIES = 1024
 
 export const enum Team {
   Player,
